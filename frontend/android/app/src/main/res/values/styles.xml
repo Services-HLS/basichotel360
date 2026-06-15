@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">#00796B</item>
+        <item name="colorPrimaryDark">#004D40</item>
+        <item name="colorAccent">#009688</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        
+        <!-- CALENDAR CUSTOMIZATION -->
+        <item name="android:datePickerStyle">@style/CustomDatePicker</item>
+        <item name="android:dialogTheme">@style/CustomCalendarDialog</item>
+    </style>
+
+    <!-- Calendar Dialog Theme -->
+    <style name="CustomCalendarDialog" parent="Theme.AppCompat.Light.Dialog">
+        <item name="colorAccent">#009688</item> <!-- Header and selection color -->
+        <item name="android:headerBackground">#00796B</item>
+    </style>
+
+    <!-- Specific DatePicker Style -->
+    <style name="CustomDatePicker" parent="android:Widget.Material.Light.DatePicker">
+        <item name="android:datePickerMode">calendar</item>
+        <item name="android:headerBackground">#00796B</item>
+    </style>
+
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>

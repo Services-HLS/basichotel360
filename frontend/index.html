@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Management System - Room Booking & Management</title>
+  <meta name="description"
+    content="Complete hotel room booking and management system with real-time availability, booking management, customer tracking, and invoice generation." />
+  <meta name="author" content="Hotel Management System" />
+
+  <meta property="og:title" content="Hotel Management System - Room Booking & Management" />
+  <meta property="og:description"
+    content="Professional hotel management solution for room bookings, availability tracking, and customer management." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@lovable_dev" />
+  <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  <link rel="manifest" href="/manifest.json" />
+</head>
+
+<body>
+  <div id="pwa-update-banner"
+    style="display:none; position:fixed; bottom:20px; left:20px; right:20px; background:#1e293b; color:white; padding:18px; border-radius:16px; z-index:99999; justify-content:space-between; align-items:center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif; border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);">
+    <div style="display: flex; align-items: center;">
+      <div
+        style="background: linear-gradient(135deg, #27ae60, #2ecc71); width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 16px; box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);">
+        <svg fill="white" width="22" height="22" viewBox="0 0 24 24">
+          <path
+            d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1a6.87 6.87 0 0 0-1.96 5.1c.1 1.98.86 3.85 2.15 5.25a7.07 7.07 0 0 0 5.3 2.25c1.86 0 3.6-.72 4.93-2.04l1.45 1.45a9.04 9.04 0 0 1-6.38 2.63 9.1 9.1 0 0 1-6.78-2.91 9.15 9.15 0 0 1-2.75-6.68 8.93 8.93 0 0 1 2.54-6.56c3.54-3.5 9.25-3.4 12.79.1l2.54-2.6V10.12z" />
+        </svg>
+      </div>
+      <div>
+        <strong style="display:block; font-size: 16px; margin-bottom: 2px;">System Update Ready</strong>
+        <span style="font-size: 13px; color: #cbd5e1;">A new version of the Hotel Management System is available.</span>
+      </div>
+    </div>
+    <button id="pwa-update-btn"
+      style="background:#27ae60; color:white; border:none; padding:12px 24px; border-radius:10px; cursor:pointer; font-weight:700; margin-left: 10px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2);">UPDATE
+      NOW</button>
+  </div>
+
+  <div id="root"></div>
+  <div id="portal-root"></div>
+
+  <script type="module" src="/src/main.tsx"></script>
+<script >
+  // Request notification permission for Push Updates
+  if ('Notification' in window && Notification.permission === 'default') {
+  window.addEventListener('load', () => {
+  setTimeout(() => {
+  Notification.requestPermission();
+  }, 5000); // Ask after 5 seconds to not intrude immediately
+  });
+  }
+
+  // Service worker code
+  if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+  console.log('🚀 Service Worker registered');
+
+  // Check for periodic updates every hour
+  setInterval(() => {
+  reg.update();
+  }, 1000 * 60 * 60);
+
+  if (reg.waiting) {
+  showUpdateBanner(reg.waiting);
+  }
+
+  reg.addEventListener('updatefound', () => {
+  const newWorker = reg.installing;
+  newWorker.addEventListener('statechange', () => {
+  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+  showUpdateBanner(newWorker);
+  }
+  });
+  });
+  }).catch(error => {
+  console.log('Service worker registration failed:', error);
+  });
+  });
+
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!refreshing) {
+  window.location.reload();
+  refreshing = true;
+  }
+  });
+  }
+
+  function showUpdateBanner(worker) {
+  const banner = document.getElementById('pwa-update-banner');
+  const btn = document.getElementById('pwa-update-btn');
+
+  banner.style.display = 'flex';
+
+  btn.onclick = () => {
+  worker.postMessage({ type: 'SKIP_WAITING' });
+  banner.style.display = 'none';
+  };
+  }
+  </script>
+</body>
+
+</html>

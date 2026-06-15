@@ -1,0 +1,63 @@
+{
+  "background_color": "#ffffff",
+  "description": "Complete hotel room booking and management system with real-time availability, booking management, customer tracking, and invoice generation.",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "hms.hithlakshsolutions",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "hms.hithlakshsolutions",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "https://hotel-management-service.s3.ap-south-1.amazonaws.com/HMS.jpeg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "isSquare": true,
+      "isPng": false,
+      "isWebp": false,
+      "isJpg": true,
+      "width": 512,
+      "is512x512": true,
+      "is256x256": false,
+      "is192x192": false
+    }, {
+      "src": "https://hotel-management-service.s3.ap-south-1.amazonaws.com/hmslogo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "isSquare": true,
+      "isPng": true,
+      "isWebp": false,
+      "isJpg": false,
+      "width": 192,
+      "is512x512": false,
+      "is256x256": false,
+      "is192x192": true
+    }, {
+      "src": "https://hotel-management-service.s3.ap-south-1.amazonaws.com/hmslogo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "isSquare": true,
+      "isPng": true,
+      "isWebp": false,
+      "isJpg": false,
+      "width": 512,
+      "is512x512": true,
+      "is256x256": false,
+      "is192x192": false
+    },
+    {
+      "src": "https://hms.hithlakshsolutions.com/favicon.ico",
+      "type": "image/x-icon",
+      "isSquare": false,
+      "isPng": false,
+      "isWebp": false,
+      "isJpg": false,
+      "width": 0,
+      "is512x512": false,
+      "is256x256": false,
+      "is192x192": false
+    }
+  ]
+}

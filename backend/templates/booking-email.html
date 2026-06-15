@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Confirmation - {{hotelName}}</title>
+  <style>
+    /* Email Template Styles */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0;
+      background: #f5f7fa;
+    }
+    
+    .email-container {
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      margin: 20px;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px 20px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+    }
+    
+    .header .subtitle {
+      margin: 10px 0 0;
+      opacity: 0.9;
+      font-size: 16px;
+    }
+    
+    .content {
+      padding: 30px;
+    }
+    
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 25px;
+      color: #2c3e50;
+    }
+    
+    .booking-card {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+      border-left: 4px solid #3498db;
+    }
+    
+    .booking-id {
+      display: inline-block;
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 6px 15px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 15px;
+    }
+    
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .detail-item {
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+    }
+    
+    .detail-label {
+      font-size: 12px;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+    
+    .detail-value {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 16px;
+    }
+    
+    .amount-card {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin: 25px 0;
+    }
+    
+    .amount-label {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 5px;
+    }
+    
+    .amount-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 10px 0;
+    }
+    
+    .timeline {
+      margin: 25px 0;
+      position: relative;
+    }
+    
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 20px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #e0e0e0;
+    }
+    
+    .timeline-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    .timeline-icon {
+      width: 40px;
+      height: 40px;
+      background: white;
+      border: 2px solid #3498db;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 15px;
+      z-index: 1;
+      flex-shrink: 0;
+    }
+    
+    .timeline-content {
+      flex: 1;
+      padding-top: 8px;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 12px 25px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      flex: 1;
+      min-width: 140px;
+    }
+    
+    .btn-primary {
+      background: #4a6cf7;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: #f8f9fa;
+      color: #495057;
+      border: 2px solid #dee2e6;
+    }
+    
+    .hotel-info {
+      background: #e8f4fd;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+    }
+    
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #6c757d;
+      font-size: 12px;
+      border-top: 1px solid #e9ecef;
+      background: #f8f9fa;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .badge-pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    @media (max-width: 480px) {
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>{{hotelName}}</h1>
+      <p class="subtitle">Booking Confirmation</p>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        Dear <strong>{{customerName}}</strong>,
+      </div>
+      
+      <p>Thank you for choosing {{hotelName}}! Your booking has been confirmed successfully.</p>
+      
+      <div class="booking-card">
+        <div class="booking-id">Booking #{{bookingId}}</div>
+        
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-icon">📅</div>
+            <div class="timeline-content">
+              <div class="detail-label">Check-in</div>
+              <div class="detail-value">{{checkInDate}} • {{checkInTime}}</div>
+            </div>
+          </div>
+          
+          <div class="timeline-item">
+            <div class="timeline-icon">🚪</div>
+            <div class="timeline-content">
+              <div class="detail-label">Room Details</div>
+              <div class="detail-value">{{roomNumber}} ({{roomType}})</div>
+              <div style="margin-top: 5px; color: #666;">{{guests}} guest(s)</div>
+            </div>
+          </div>
+          
+          <div class="timeline-item">
+            <div class="timeline-icon">📅</div>
+            <div class="timeline-content">
+              <div class="detail-label">Check-out</div>
+              <div class="detail-value">{{checkOutDate}} • {{checkOutTime}}</div>
+              <div style="margin-top: 5px; color: #666;">{{duration}} night(s)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="details-grid">
+        <div class="detail-item">
+          <div class="detail-label">Booking Date</div>
+          <div class="detail-value">{{bookingDate}}</div>
+        </div>
+        
+        <div class="detail-item">
+          <div class="detail-label">Status</div>
+          <div class="detail-value">
+            Confirmed
+            <span class="badge badge-success">Booked</span>
+          </div>
+        </div>
+        
+        <div class="detail-item">
+          <div class="detail-label">Payment Method</div>
+          <div class="detail-value">{{paymentMethod}}</div>
+        </div>
+        
+        <div class="detail-item">
+          <div class="detail-label">Payment Status</div>
+          <div class="detail-value">
+            {{paymentStatus}}
+            <span class="badge {{paymentStatusClass}}">{{paymentStatusText}}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="amount-card">
+        <div class="amount-label">Total Amount</div>
+        <div class="amount-value">₹{{totalAmount}}</div>
+        <div>Inclusive of all taxes</div>
+      </div>
+      
+      <div class="action-buttons">
+        <a href="mailto:{{hotelEmail}}?subject=Query%20-%20Booking%20{{bookingId}}" class="btn btn-primary">
+          📧 Contact Hotel
+        </a>
+        <a href="{{invoiceLink}}" class="btn btn-secondary" target="_blank">
+          📄 Download Invoice
+        </a>
+      </div>
+      
+      <div class="hotel-info">
+        <h3 style="margin-top: 0; color: #2c3e50;">🏨 Hotel Information</h3>
+        <p><strong>Address:</strong> {{hotelAddress}}</p>
+        <p><strong>Phone:</strong> {{hotelPhone}}</p>
+        <p><strong>Email:</strong> {{hotelEmail}}</p>
+        <p><strong>Check-in Time:</strong> 14:00 • <strong>Check-out Time:</strong> 12:00</p>
+      </div>
+      
+      <div style="background: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <h4 style="margin-top: 0; color: #d35400;">📌 Important Notes</h4>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li>Please carry your ID proof at check-in</li>
+          <li>Early check-in/late check-out subject to availability</li>
+          <li>Smoking is prohibited in all rooms</li>
+          <li>Complementary breakfast served from 7:00 AM to 10:00 AM</li>
+        </ul>
+      </div>
+      
+      <p>We look forward to welcoming you! If you have any questions, feel free to contact us.</p>
+      
+      <p style="margin-top: 30px;">
+        Best regards,<br>
+        <strong>The {{hotelName}} Team</strong>
+      </p>
+    </div>
+    
+    <!-- <div class="footer">
+      <p>This is an automated email. Please do not reply to this message.</p>
+      <p>© {{currentYear}} {{hotelName}}. All rights reserved.</p>
+      <p style="margin-top: 10px; font-size: 11px;">
+        <a href="{{unsubscribeLink}}" style="color: #6c757d;">Unsubscribe</a> | 
+        <a href="{{privacyLink}}" style="color: #6c757d;">Privacy Policy</a> | 
+        <a href="{{termsLink}}" style="color: #6c757d;">Terms & Conditions</a>
+      </p>
+    </div> -->
+
+    <div class="footer">
+  <p>This is an automated email. Please do not reply to this message.</p>
+  <p>© {{currentYear}} {{hotelName}}. All rights reserved.</p>
+  <p style="margin-top: 10px; font-size: 11px;">
+    <a href="{{privacyLink}}" style="color: #6c757d;">Privacy</a> | 
+    <a href="{{termsLink}}" style="color: #6c757d;">Terms & Conditions</a>
+  </p>
+  <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center;">
+    <p style="font-size: 11px; color: #6c757d; margin-bottom: 8px;">Designed by:</p>
+    <div style="display: inline-flex; align-items: center; gap: 8px;">
+      <!-- Company Logo -->
+      <img src="{{companyLogoUrl}}" alt="Company Logo" style="height: 20px; width: auto;">
+      <!-- Company Name with URL -->
+      <a href="{{companyWebsite}}" style="color: #4a6cf7; text-decoration: none; font-weight: 600; font-size: 12px;">
+        Hithlaksh Solutions Private Limited
+      </a>
+    </div>
+  </div>
+</div>
+  </div>
+</body>
+</html>

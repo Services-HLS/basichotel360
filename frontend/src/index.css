@@ -1,0 +1,212 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 210 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 15% 15%;
+
+    --primary: 188 95% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 15% 95%;
+    --secondary-foreground: 210 15% 15%;
+
+    --muted: 210 15% 95%;
+    --muted-foreground: 210 10% 45%;
+
+    --accent: 43 96% 56%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 188 95% 40%;
+
+    --radius: 0.75rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(188 95% 40%), hsl(188 95% 50%));
+    --gradient-hero: linear-gradient(135deg, hsl(188 95% 40%), hsl(217 91% 60%));
+    
+    --shadow-sm: 0 1px 2px 0 hsl(210 15% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(210 15% 15% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(210 15% 15% / 0.1);
+    
+    --transition-base: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 210 30% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 210 25% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 210 25% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 188 95% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 18%;
+    --secondary-foreground: 210 20% 95%;
+
+    --muted: 210 20% 18%;
+    --muted-foreground: 210 15% 65%;
+
+    --accent: 43 96% 56%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 210 20% 20%;
+    --input: 210 20% 20%;
+    --ring: 188 95% 50%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(188 95% 50%), hsl(188 95% 60%));
+    --gradient-hero: linear-gradient(135deg, hsl(188 95% 50%), hsl(217 91% 60%));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Add this to your global CSS file */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Optional: Improve mobile touch targets */
+@media (max-width: 640px) {
+    button, 
+    [role="tab"], 
+    .h-8, 
+    .h-9 {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    input, 
+    select {
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+}
+
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Make calendar scrollable on mobile */
+.calendar-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Style the calendar table */
+.calendar-table {
+  min-width: 350px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.calendar-table th,
+.calendar-table td {
+  padding: 8px 12px;
+  text-align: center;
+}
+
+@layer components {
+  .page-shell {
+    @apply min-w-0 space-y-4 overflow-x-hidden sm:space-y-6;
+  }
+
+  .mobile-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-table-wrap table {
+    min-width: 36rem;
+    width: 100%;
+  }
+
+  .mobile-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4;
+  }
+
+  .mobile-modal-panel {
+    @apply flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-background sm:max-h-[90vh] sm:rounded-xl;
+  }
+}
+
+/* Add to your global.css or index.css */
+@media (min-width: 480px) {
+    .xs\:inline {
+        display: inline;
+    }
+    .xs\:hidden {
+        display: none;
+    }
+}
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

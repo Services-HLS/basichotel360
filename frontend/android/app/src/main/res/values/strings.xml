@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hotel 360</string>
+    <string name="title_activity_main">Hotel 360</string>
+    <string name="package_name">com.hls.hotelapp</string>
+    <string name="custom_url_scheme">com.hls.hotelapp</string>
+</resources>

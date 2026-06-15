@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel Invoice Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Outfit:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#C9A84C;--gold-light:#F0D98C;--gold-dark:#1A1208;
+  --navy:#0D1F4E;--navy-mid:#1A3070;--navy-light:#C8D4F0;
+  --emerald:#1E4D2B;--emerald-light:#E8F5E0;--emerald-mid:#5A8A60;
+  --slate:#1C1C18;--slate-light:#F8F8F6;--slate-mid:#7A7868;
+}
+body{background:#F0EDE8;font-family:'Outfit',sans-serif;min-height:100vh;}
+
+/* ─── TOOLBAR ─── */
+#toolbar{background:#1A1208;padding:0;position:sticky;top:0;z-index:100;border-bottom:2px solid var(--gold);}
+#toolbar-inner{max-width:1400px;margin:0 auto;padding:0 1.5rem;display:flex;align-items:center;gap:0;}
+#toolbar-logo{font-family:'Cormorant Garamond',serif;font-size:17px;color:var(--gold-light);letter-spacing:.12em;padding:.75rem 1.5rem .75rem 0;border-right:1px solid #3A2808;white-space:nowrap;}
+#toolbar-logo span{display:block;font-size:8px;font-family:'Outfit',sans-serif;letter-spacing:.4em;color:#7A5A20;text-transform:uppercase;margin-top:1px;}
+.tb-group{display:flex;align-items:center;gap:0;padding:0 1rem;border-right:1px solid #3A2808;}
+.tb-group:last-child{border-right:none;margin-left:auto;}
+.tb-label{font-size:9px;letter-spacing:.25em;color:#7A5A20;text-transform:uppercase;margin-right:.6rem;white-space:nowrap;}
+.theme-btn{background:none;border:1px solid #3A2808;color:#A08030;font-size:10px;font-family:'Outfit',sans-serif;letter-spacing:.15em;padding:.35rem .7rem;cursor:pointer;text-transform:uppercase;transition:all .2s;}
+.theme-btn:hover{border-color:var(--gold);color:var(--gold);}
+.theme-btn.active{background:var(--gold);color:#1A1208;border-color:var(--gold);font-weight:600;}
+.tb-action{background:none;border:1px solid #3A2808;color:#A08030;font-size:10px;font-family:'Outfit',sans-serif;letter-spacing:.1em;padding:.35rem .8rem;cursor:pointer;text-transform:uppercase;transition:all .2s;white-space:nowrap;}
+.tb-action:hover{border-color:var(--gold);color:var(--gold-light);background:#2A1808;}
+.tb-action.primary{background:var(--gold);color:#1A1208;border-color:var(--gold);}
+.tb-action.primary:hover{background:var(--gold-light);}
+
+/* ─── MAIN LAYOUT ─── */
+#main{max-width:1400px;margin:0 auto;padding:1.5rem;display:grid;grid-template-columns:260px 1fr;gap:1.5rem;}
+
+/* ─── SIDEBAR ─── */
+#sidebar{background:#fff;border:1px solid #DDD8CC;padding:0;height:fit-content;position:sticky;top:60px;}
+.sb-section{border-bottom:1px solid #EEE8DC;}
+.sb-section:last-child{border-bottom:none;}
+.sb-head{background:#F8F4EE;padding:.65rem 1rem;font-size:9px;font-weight:600;letter-spacing:.28em;color:#7A5A20;text-transform:uppercase;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.sb-head:hover{background:#F2EDE4;}
+.sb-body{padding:.75rem 1rem;}
+.sb-toggle{display:flex;align-items:center;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #F0EAE0;}
+.sb-toggle:last-child{border-bottom:none;}
+.sb-toggle label{font-size:11px;color:#4A3820;cursor:pointer;user-select:none;}
+.sb-toggle input[type=checkbox]{accent-color:var(--gold);width:14px;height:14px;cursor:pointer;}
+.sb-input{width:100%;border:1px solid #DDD8CC;padding:.4rem .6rem;font-size:11px;font-family:'Outfit',sans-serif;color:#2A1808;background:#FDFAF5;margin-bottom:.4rem;outline:none;}
+.sb-input:focus{border-color:var(--gold);}
+.sb-btn{width:100%;background:none;border:1px solid #C9A84C;color:#7A5020;font-size:10px;font-family:'Outfit',sans-serif;letter-spacing:.12em;padding:.4rem;cursor:pointer;text-transform:uppercase;margin-top:.3rem;transition:all .2s;}
+.sb-btn:hover{background:var(--gold);color:#1A1208;}
+
+/* ─── INVOICE PREVIEW ─── */
+#preview-wrap{background:#fff;border:1px solid #DDD8CC;}
+#preview-toolbar{background:#F8F4EE;padding:.5rem 1rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid #DDD8CC;}
+#preview-toolbar span{font-size:9px;letter-spacing:.2em;color:#7A5A20;text-transform:uppercase;}
+#invoice{max-width:860px;margin:1.5rem auto;font-family:'Outfit',sans-serif;}
+
+/* ─── EDITABLE FIELDS ─── */
+[contenteditable]{outline:none;cursor:text;}
+[contenteditable]:hover{background:rgba(201,168,76,.08);border-radius:2px;}
+[contenteditable]:focus{background:rgba(201,168,76,.14);border-radius:2px;}
+.removable{position:relative;}
+.remove-btn{display:none;position:absolute;right:-22px;top:50%;transform:translateY(-50%);background:#C0392B;color:#fff;border:none;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:18px;text-align:center;cursor:pointer;z-index:10;}
+.removable:hover .remove-btn{display:block;}
+tr.removable .remove-btn{right:4px;top:50%;transform:translateY(-50%);}
+
+/* ─── BASE THEME: GOLD (DEFAULT STRUCTURE) ─── */
+.theme-gold #inv-wrap,
+.theme-slate #inv-wrap,
+.theme-emerald #inv-wrap,
+.theme-navy #inv-wrap {
+  background: #FDFAF5;
+  border: 1px solid #C9A84C;
+}
+.theme-gold .inv-header,
+.theme-slate .inv-header,
+.theme-emerald .inv-header,
+.theme-navy .inv-header {
+  background: #1A1208;
+  color: #C9A84C;
+  padding: 2.2rem 2.8rem 1.8rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.theme-gold .inv-logo-name,
+.theme-slate .inv-logo-name,
+.theme-emerald .inv-logo-name,
+.theme-navy .inv-logo-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: .18em;
+  color: #F0D98C;
+  line-height: 1.1;
+}
+.theme-gold .inv-logo-sub,
+.theme-slate .inv-logo-sub,
+.theme-emerald .inv-logo-sub,
+.theme-navy .inv-logo-sub {
+  font-size: 9px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  letter-spacing: .45em;
+  color: #A08030;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+.theme-gold .inv-logo-addr,
+.theme-slate .inv-logo-addr,
+.theme-emerald .inv-logo-addr,
+.theme-navy .inv-logo-addr {
+  font-size: 10px;
+  color: #7A6030;
+  margin-top: 8px;
+  line-height: 1.8;
+  font-weight: 300;
+}
+.theme-gold .inv-header-right,
+.theme-slate .inv-header-right,
+.theme-emerald .inv-header-right,
+.theme-navy .inv-header-right {
+  text-align: right;
+}
+.theme-gold .inv-title,
+.theme-slate .inv-title,
+.theme-emerald .inv-title,
+.theme-navy .inv-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: .2em;
+  color: #F0D98C;
+  text-transform: uppercase;
+}
+.theme-gold .inv-meta-line,
+.theme-slate .inv-meta-line,
+.theme-emerald .inv-meta-line,
+.theme-navy .inv-meta-line {
+  font-size: 10.5px;
+  color: #A08030;
+  margin: 2px 0;
+  font-weight: 300;
+}
+.theme-gold .inv-meta-line strong,
+.theme-slate .inv-meta-line strong,
+.theme-emerald .inv-meta-line strong,
+.theme-navy .inv-meta-line strong {
+  color: #C9A84C;
+}
+.theme-gold .gold-bar,
+.theme-slate .gold-bar,
+.theme-emerald .gold-bar,
+.theme-navy .gold-bar {
+  display: block;
+  height: 2px;
+  background: var(--gold);
+}
+.theme-gold .inv-guest-row,
+.theme-slate .inv-guest-row,
+.theme-emerald .inv-guest-row,
+.theme-navy .inv-guest-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid #E8D9B0;
+}
+.theme-gold .inv-guest-cell,
+.theme-slate .inv-guest-cell,
+.theme-emerald .inv-guest-cell,
+.theme-navy .inv-guest-cell {
+  padding: 1.2rem 2.2rem;
+  border-right: 1px solid #E8D9B0;
+}
+.theme-gold .inv-guest-cell:last-child,
+.theme-slate .inv-guest-cell:last-child,
+.theme-emerald .inv-guest-cell:last-child,
+.theme-navy .inv-guest-cell:last-child {
+  border-right: none;
+}
+.theme-gold .cell-label,
+.theme-slate .cell-label,
+.theme-emerald .cell-label,
+.theme-navy .cell-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .25em;
+  color: #A08030;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.theme-gold .cell-value,
+.theme-slate .cell-value,
+.theme-emerald .cell-value,
+.theme-navy .cell-value {
+  font-size: 12.5px;
+  color: #1A1208;
+  line-height: 1.5;
+}
+.theme-gold .cell-value strong,
+.theme-slate .cell-value strong,
+.theme-emerald .cell-value strong,
+.theme-navy .cell-value strong {
+  font-weight: 600;
+  display: block;
+  font-size: 13.5px;
+}
+.theme-gold .sec-title,
+.theme-slate .sec-title,
+.theme-emerald .sec-title,
+.theme-navy .sec-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .3em;
+  color: #A08030;
+  text-transform: uppercase;
+  padding: 1rem 2.2rem .5rem;
+  border-top: 1px solid #E8D9B0;
+}
+.theme-gold .inv-tbl,
+.theme-slate .inv-tbl,
+.theme-emerald .inv-tbl,
+.theme-navy .inv-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.theme-gold .inv-tbl thead tr,
+.theme-slate .inv-tbl thead tr,
+.theme-emerald .inv-tbl thead tr,
+.theme-navy .inv-tbl thead tr {
+  background: #F5EDD8;
+}
+.theme-gold .inv-tbl th,
+.theme-slate .inv-tbl th,
+.theme-emerald .inv-tbl th,
+.theme-navy .inv-tbl th {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  color: #A08030;
+  text-transform: uppercase;
+  padding: .5rem .9rem;
+  text-align: left;
+  border-bottom: 1px solid #E8D9B0;
+}
+.theme-gold .inv-tbl th:first-child,
+.theme-slate .inv-tbl th:first-child,
+.theme-emerald .inv-tbl th:first-child,
+.theme-navy .inv-tbl th:first-child {
+  padding-left: 2.2rem;
+  width: 44%;
+}
+.theme-gold .inv-tbl th:last-child,
+.theme-slate .inv-tbl th:last-child,
+.theme-emerald .inv-tbl th:last-child,
+.theme-navy .inv-tbl th:last-child {
+  text-align: right;
+  padding-right: 2.2rem;
+}
+.theme-gold .inv-tbl td,
+.theme-slate .inv-tbl td,
+.theme-emerald .inv-tbl td,
+.theme-navy .inv-tbl td {
+  font-size: 12px;
+  color: #2A1F0A;
+  padding: .55rem .9rem;
+  border-bottom: 1px solid #F0E8CF;
+  vertical-align: top;
+  font-weight: 300;
+}
+.theme-gold .inv-tbl td:first-child,
+.theme-slate .inv-tbl td:first-child,
+.theme-emerald .inv-tbl td:first-child,
+.theme-navy .inv-tbl td:first-child {
+  padding-left: 2.2rem;
+  font-weight: 400;
+}
+.theme-gold .inv-tbl td:last-child,
+.theme-slate .inv-tbl td:last-child,
+.theme-emerald .inv-tbl td:last-child,
+.theme-navy .inv-tbl td:last-child {
+  text-align: right;
+  padding-right: 2.2rem;
+  font-weight: 500;
+}
+.theme-gold .inv-tbl td .note,
+.theme-slate .inv-tbl td .note,
+.theme-emerald .inv-tbl td .note,
+.theme-navy .inv-tbl td .note {
+  font-size: 10px;
+  color: #7A6030;
+  font-style: italic;
+  font-family: 'Cormorant Garamond', serif;
+  display: block;
+  margin-top: 1px;
+}
+.theme-gold .calc-area,
+.theme-slate .calc-area,
+.theme-emerald .calc-area,
+.theme-navy .calc-area {
+  background: #FAF4E8;
+  padding: 1rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  border-top: 1px solid #E8D9B0;
+}
+.theme-gold .calc-row,
+.theme-slate .calc-row,
+.theme-emerald .calc-row,
+.theme-navy .calc-row {
+  display: flex;
+  gap: 2.5rem;
+  font-size: 12px;
+  color: #5A4010;
+}
+.theme-gold .calc-row span:last-child,
+.theme-slate .calc-row span:last-child,
+.theme-emerald .calc-row span:last-child,
+.theme-navy .calc-row span:last-child {
+  min-width: 80px;
+  text-align: right;
+  font-weight: 500;
+}
+.theme-gold .calc-row.disc span,
+.theme-slate .calc-row.disc span,
+.theme-emerald .calc-row.disc span,
+.theme-navy .calc-row.disc span {
+  color: #1A5A20;
+}
+.theme-gold .calc-row.gst,
+.theme-slate .calc-row.gst,
+.theme-emerald .calc-row.gst,
+.theme-navy .calc-row.gst {
+  border-top: 1px dashed #D9C890;
+  padding-top: 4px;
+}
+.theme-gold .total-bar,
+.theme-slate .total-bar,
+.theme-emerald .total-bar,
+.theme-navy .total-bar {
+  background: #1A1208;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 2.2rem;
+}
+.theme-gold .total-label,
+.theme-slate .total-label,
+.theme-emerald .total-label,
+.theme-navy .total-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .3em;
+  color: #A08030;
+  text-transform: uppercase;
+}
+.theme-gold .total-amount,
+.theme-slate .total-amount,
+.theme-emerald .total-amount,
+.theme-navy .total-amount {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  color: #F0D98C;
+}
+.theme-gold .inv-footer,
+.theme-slate .inv-footer,
+.theme-emerald .inv-footer,
+.theme-navy .inv-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 2px solid #C9A84C;
+}
+.theme-gold .inv-footer-cell,
+.theme-slate .inv-footer-cell,
+.theme-emerald .inv-footer-cell,
+.theme-navy .inv-footer-cell {
+  padding: 1.1rem 2.2rem;
+  border-right: 1px solid #E8D9B0;
+}
+.theme-gold .inv-footer-cell:first-child,
+.theme-slate .inv-footer-cell:first-child,
+.theme-emerald .inv-footer-cell:first-child,
+.theme-navy .inv-footer-cell:first-child {
+  border-right: 1px solid #E8D9B0;
+}
+.theme-gold .inv-footer-cell:last-child,
+.theme-slate .inv-footer-cell:last-child,
+.theme-emerald .inv-footer-cell:last-child,
+.theme-navy .inv-footer-cell:last-child {
+  border-right: none;
+}
+.theme-gold .footer-label,
+.theme-slate .footer-label,
+.theme-emerald .footer-label,
+.theme-navy .footer-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .25em;
+  color: #A08030;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.theme-gold .footer-val,
+.theme-slate .footer-val,
+.theme-emerald .footer-val,
+.theme-navy .footer-val {
+  font-size: 11px;
+  color: #5A4010;
+  line-height: 1.8;
+  font-weight: 300;
+}
+.theme-gold .remarks-text,
+.theme-slate .remarks-text,
+.theme-emerald .remarks-text,
+.theme-navy .remarks-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 13.5px;
+  color: #7A6030;
+  line-height: 1.6;
+}
+.theme-gold .paid-stamp,
+.theme-slate .paid-stamp,
+.theme-emerald .paid-stamp,
+.theme-navy .paid-stamp {
+  display: inline-block;
+  border: 1.5px solid #1A5A20;
+  color: #1A5A20;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .25em;
+  padding: 3px 9px;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+/* ─── THEME SPECIFIC OVERRIDES (ONLY COLORS CHANGE) ─── */
+
+/* Slate Theme Colors */
+.theme-slate #inv-wrap {
+  background: #F8F8F6;
+  border-color: #D4D0C8;
+}
+.theme-slate .inv-header {
+  background: #1C1C18;
+}
+.theme-slate .inv-logo-name {
+  color: #F0EDE6;
+}
+.theme-slate .inv-logo-sub {
+  color: #7A7860;
+}
+.theme-slate .inv-logo-addr {
+  color: #9A9888;
+}
+.theme-slate .inv-title {
+  color: #F0EDE6;
+}
+.theme-slate .inv-meta-line {
+  color: #7A7860;
+}
+.theme-slate .inv-meta-line strong {
+  color: #F0EDE6;
+}
+.theme-slate .gold-bar {
+  background: #7A7868;
+}
+.theme-slate .inv-guest-row {
+  border-bottom-color: #EAEAE4;
+}
+.theme-slate .inv-guest-cell {
+  border-right-color: #EAEAE4;
+}
+.theme-slate .cell-label {
+  color: #7A7860;
+}
+.theme-slate .cell-value {
+  color: #1C1C18;
+}
+.theme-slate .cell-value strong {
+  color: #1C1C18;
+}
+.theme-slate .sec-title {
+  color: #7A7860;
+  border-top-color: #EAEAE4;
+}
+.theme-slate .inv-tbl thead tr {
+  background: #F0F0EC;
+}
+.theme-slate .inv-tbl th {
+  color: #7A7860;
+  border-bottom-color: #EAEAE4;
+}
+.theme-slate .inv-tbl td {
+  color: #2A2A22;
+  border-bottom-color: #F4F4F0;
+}
+.theme-slate .inv-tbl td .note {
+  color: #9A9888;
+}
+.theme-slate .calc-area {
+  background: #F8F8F6;
+  border-top-color: #EAEAE4;
+}
+.theme-slate .calc-row {
+  color: #5A5848;
+}
+.theme-slate .calc-row.disc span {
+  color: #2A6020;
+}
+.theme-slate .calc-row.gst {
+  border-top-color: #D4D0C8;
+}
+.theme-slate .total-bar {
+  background: #1C1C18;
+}
+.theme-slate .total-label {
+  color: #7A7860;
+}
+.theme-slate .total-amount {
+  color: #F0EDE6;
+}
+.theme-slate .inv-footer {
+  border-top-color: #D4D0C8;
+}
+.theme-slate .inv-footer-cell {
+  border-right-color: #EAEAE4;
+}
+.theme-slate .footer-label {
+  color: #7A7860;
+}
+.theme-slate .footer-val {
+  color: #5A5848;
+}
+.theme-slate .remarks-text {
+  color: #7A7868;
+}
+.theme-slate .paid-stamp {
+  border-color: #3A8A50;
+  color: #6AC080;
+}
+
+/* Emerald Theme Colors */
+.theme-emerald #inv-wrap {
+  background: #FFFFFF;
+  border-color: #C8D8C0;
+}
+.theme-emerald .inv-header {
+  background: #1E4D2B;
+}
+.theme-emerald .inv-logo-name {
+  color: #E8F5E0;
+}
+.theme-emerald .inv-logo-sub {
+  color: #5A8A60;
+}
+.theme-emerald .inv-logo-addr {
+  color: #5A6650;
+}
+.theme-emerald .inv-title {
+  color: #E8F5E0;
+}
+.theme-emerald .inv-meta-line {
+  color: #5A8A60;
+}
+.theme-emerald .inv-meta-line strong {
+  color: #E8F5E0;
+}
+.theme-emerald .gold-bar {
+  background: #5A8A60;
+}
+.theme-emerald .inv-guest-row {
+  border-bottom-color: #C8D8C0;
+}
+.theme-emerald .inv-guest-cell {
+  border-right-color: #C8D8C0;
+}
+.theme-emerald .cell-label {
+  color: #5A8A60;
+}
+.theme-emerald .cell-value {
+  color: #1A2A1C;
+}
+.theme-emerald .cell-value strong {
+  color: #1A2A1C;
+}
+.theme-emerald .sec-title {
+  color: #5A8A60;
+  border-top-color: #C8D8C0;
+}
+.theme-emerald .inv-tbl thead tr {
+  background: #F2F7F0;
+}
+.theme-emerald .inv-tbl th {
+  color: #5A8A60;
+  border-bottom-color: #C8D8C0;
+}
+.theme-emerald .inv-tbl td {
+  color: #1A2A1C;
+  border-bottom-color: #EEF4EA;
+}
+.theme-emerald .inv-tbl td .note {
+  color: #7A9A70;
+}
+.theme-emerald .calc-area {
+  background: #F6FAF4;
+  border-top-color: #C8D8C0;
+}
+.theme-emerald .calc-row {
+  color: #3A5040;
+}
+.theme-emerald .calc-row.disc span {
+  color: #1E6030;
+}
+.theme-emerald .calc-row.gst {
+  border-top-color: #B0D0B0;
+}
+.theme-emerald .total-bar {
+  background: #1E4D2B;
+}
+.theme-emerald .total-label {
+  color: #7AB880;
+}
+.theme-emerald .total-amount {
+  color: #E8F5E0;
+}
+.theme-emerald .inv-footer {
+  border-top-color: #C8D8C0;
+}
+.theme-emerald .inv-footer-cell {
+  border-right-color: #C8D8C0;
+}
+.theme-emerald .footer-label {
+  color: #5A8A60;
+}
+.theme-emerald .footer-val {
+  color: #3A5040;
+}
+.theme-emerald .remarks-text {
+  color: #3A5A3C;
+}
+.theme-emerald .paid-stamp {
+  background: #EAF5E0;
+  color: #1E4D2B;
+}
+
+/* Navy Theme Colors */
+.theme-navy #inv-wrap {
+  background: #F7F8FC;
+  border-color: #C0C8DC;
+}
+.theme-navy .inv-header {
+  background: #0D1F4E;
+}
+.theme-navy .inv-logo-name {
+  color: #E8EDF8;
+}
+.theme-navy .inv-logo-sub {
+  color: #6A7FA8;
+}
+.theme-navy .inv-logo-addr {
+  color: #7A8AA8;
+}
+.theme-navy .inv-title {
+  color: #E8EDF8;
+}
+.theme-navy .inv-meta-line {
+  color: #6A7FA8;
+}
+.theme-navy .inv-meta-line strong {
+  color: #C0CDE8;
+}
+.theme-navy .gold-bar {
+  background: #C9A84C;
+}
+.theme-navy .inv-guest-row {
+  border-bottom-color: #D0D8EC;
+}
+.theme-navy .inv-guest-cell {
+  border-right-color: #D0D8EC;
+}
+.theme-navy .cell-label {
+  color: #5A6A90;
+}
+.theme-navy .cell-value {
+  color: #1A2040;
+}
+.theme-navy .cell-value strong {
+  color: #1A2040;
+}
+.theme-navy .sec-title {
+  color: #5A6A90;
+  border-top-color: #D0D8EC;
+}
+.theme-navy .inv-tbl thead tr {
+  background: #F0F3FA;
+}
+.theme-navy .inv-tbl th {
+  color: #5A6A90;
+  border-bottom-color: #D0D8EC;
+}
+.theme-navy .inv-tbl td {
+  color: #1A2040;
+  border-bottom-color: #EEF0F8;
+}
+.theme-navy .inv-tbl td .note {
+  color: #8A94B0;
+}
+.theme-navy .calc-area {
+  background: #F7F8FC;
+  border-top-color: #C0C8DC;
+}
+.theme-navy .calc-row {
+  color: #4A5A7A;
+}
+.theme-navy .calc-row.disc span {
+  color: #1A5A30;
+}
+.theme-navy .calc-row.gst {
+  border-top-color: #B0BAD0;
+}
+.theme-navy .total-bar {
+  background: #0D1F4E;
+}
+.theme-navy .total-label {
+  color: #5A70A0;
+}
+.theme-navy .total-amount {
+  color: #C8D4F0;
+}
+.theme-navy .inv-footer {
+  border-top-color: #C9A84C;
+}
+.theme-navy .inv-footer-cell {
+  border-right-color: #D0D8EC;
+}
+.theme-navy .footer-label {
+  color: #5A6A90;
+}
+.theme-navy .footer-val {
+  color: #4A5A7A;
+}
+.theme-navy .remarks-text {
+  color: #7A8AA8;
+}
+.theme-navy .paid-stamp {
+  border-color: #3A8A50;
+  color: #6AC080;
+}
+
+.calc-row.advance span:first-child {
+    color: #6A4A20;
+    font-weight: 500;
+}
+.calc-row.advance span:last-child {
+    color: #C0392B;
+    font-weight: 600;
+}
+.calc-row.balance span:first-child {
+    color: #1A5A20;
+    font-weight: 600;
+}
+.calc-row.balance span:last-child {
+    color: #1A5A20;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* ─── PRINT ─── */
+@media print{
+  #toolbar,#sidebar,#preview-toolbar{display:none!important;}
+  #main{display:block!important;padding:0!important;}
+  #preview-wrap{border:none!important;}
+  #invoice{margin:0!important;}
+  .remove-btn{display:none!important;}
+  [contenteditable]:hover,[contenteditable]:focus{background:transparent!important;}
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div id="toolbar-inner">
+    <div id="toolbar-logo">Invoice Builder<span>Hotel Operations Suite</span></div>
+    <div class="tb-group">
+      <span class="tb-label">Template</span>
+      <button class="theme-btn active" onclick="setTheme('gold')">Gold</button>
+      <button class="theme-btn" onclick="setTheme('slate')">Slate</button>
+      <button class="theme-btn" onclick="setTheme('emerald')">Emerald</button>
+      <button class="theme-btn" onclick="setTheme('navy')">Navy</button>
+    </div>
+    <div class="tb-group">
+      <span class="tb-label">Add</span>
+      <button class="tb-action" onclick="addSection()">+ Section</button>
+      <button class="tb-action" onclick="addGuestField()">+ Guest Field</button>
+      <button class="tb-action" onclick="addCalcRow()">+ Calc Row</button>
+      <button class="tb-action" onclick="addFooterCol()">+ Footer Column</button>
+    </div>
+    <div class="tb-group">
+      <button class="tb-action" onclick="window.print()">Print / PDF</button>
+      <button class="tb-action primary" onclick="saveHTML()">Export HTML</button>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+
+    <div class="sb-section">
+      <div class="sb-head">Hotel Info</div>
+      <div class="sb-body">
+        <input class="sb-input" id="sb-hotel-name" placeholder="Hotel Name" value="HOTEL_NAME_PLACEHOLDER">
+        <input class="sb-input" id="sb-hotel-tag" placeholder="Tagline / Category" value="HOTEL_TAG_PLACEHOLDER">
+        <input class="sb-input" id="sb-hotel-addr" placeholder="Address line 1" value="HOTEL_ADDR_PLACEHOLDER">
+        <input class="sb-input" id="sb-hotel-gstin" placeholder="GSTIN" value="HOTEL_GSTIN_PLACEHOLDER">
+        <input class="sb-input" id="sb-hotel-tel" placeholder="Tel" value="HOTEL_TEL_PLACEHOLDER">
+        <button class="sb-btn" onclick="syncHotelInfo()">Apply</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head">Invoice Details</div>
+      <div class="sb-body">
+        <input class="sb-input" id="sb-inv-no" placeholder="Invoice No." value="INV_NO_PLACEHOLDER">
+        <input class="sb-input" id="sb-inv-date" placeholder="Date" value="INV_DATE_PLACEHOLDER">
+        <input class="sb-input" id="sb-inv-folio" placeholder="Folio / Room" value="INV_FOLIO_PLACEHOLDER">
+        <button class="sb-btn" onclick="syncInvoiceMeta()">Apply</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head">Show / Hide Fields</div>
+      <div class="sb-body">
+        <div class="sb-toggle"><label for="tog-guestbar">Guest Info Bar</label><input type="checkbox" id="tog-guestbar" checked onchange="toggleBlock('guest-row',this.checked)"></div>
+        <div class="sb-toggle"><label for="tog-goldbar">Accent Bar</label><input type="checkbox" id="tog-goldbar" checked onchange="toggleBlock('gold-bar',this.checked)"></div>
+        <div class="sb-toggle"><label for="tog-remarks">Remarks</label><input type="checkbox" id="tog-remarks" checked onchange="toggleBlock('remarks-block',this.checked)"></div>
+        <div class="sb-toggle"><label for="tog-discount">Discount Row</label><input type="checkbox" id="tog-discount" checked onchange="toggleCalcRow('disc',this.checked)"></div>
+        <div class="sb-toggle"><label for="tog-gst">GST Rows</label><input type="checkbox" id="tog-gst" checked onchange="toggleCalcRow('gst',this.checked)"></div>
+        <div class="sb-toggle"><label for="tog-footer">Footer</label><input type="checkbox" id="tog-footer" checked onchange="toggleBlock('inv-footer',this.checked)"></div>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head">Quick Row Add</div>
+      <div class="sb-body">
+        <select class="sb-input" id="sb-target-section">
+          <option value="0">Section 1 (Room)</option>
+          <option value="1">Section 2 (F&B)</option>
+          <option value="2">Section 3 (Spa)</option>
+        </select>
+        <input class="sb-input" id="sb-row-desc" placeholder="Description">
+        <input class="sb-input" id="sb-row-col2" placeholder="Qty / Nights">
+        <input class="sb-input" id="sb-row-col3" placeholder="Rate">
+        <input class="sb-input" id="sb-row-col4" placeholder="Amount">
+        <button class="sb-btn" onclick="addRowToSection()">Add Row</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="preview-wrap">
+    <div id="preview-toolbar">
+      <span>Live Preview — click any text to edit · hover rows to remove</span>
+    </div>
+
+    <div id="invoice">
+      <div id="inv-container" class="theme-gold">
+        <div id="inv-wrap">
+
+          <!-- HEADER - USING PLACEHOLDERS -->
+          <div class="inv-header" id="inv-header">
+            <div class="inv-accent-bar" id="inv-accent-bar"></div>
+            <div class="inv-logo-wrap" id="inv-logo-wrap">
+              <div class="inv-logo-name" contenteditable="true" id="f-hotel-name">HOTEL_NAME_PLACEHOLDER</div>
+              <div class="inv-logo-sub" contenteditable="true" id="f-hotel-tag">HOTEL_TAG_PLACEHOLDER</div>
+              <div class="inv-logo-addr" contenteditable="true" id="f-hotel-addr">HOTEL_ADDR_PLACEHOLDER<br>Tel: HOTEL_TEL_PLACEHOLDER · GSTIN: HOTEL_GSTIN_PLACEHOLDER</div>
+            </div>
+            <div class="inv-header-right">
+              <div class="inv-title" contenteditable="true">Invoice</div>
+              <div class="inv-meta-line removable" id="meta-invno">No. <strong contenteditable="true" id="f-inv-no">INV_NO_PLACEHOLDER</strong><button class="remove-btn" onclick="this.parentElement.remove()">×</button></div>
+              <div class="inv-meta-line removable" id="meta-date">Date: <strong contenteditable="true" id="f-inv-date">INV_DATE_PLACEHOLDER</strong><button class="remove-btn" onclick="this.parentElement.remove()">×</button></div>
+              <div class="inv-meta-line removable" id="meta-folio">Folio: <strong contenteditable="true" id="f-inv-folio">INV_FOLIO_PLACEHOLDER</strong><button class="remove-btn" onclick="this.parentElement.remove()">×</button></div>
+            </div>
+          </div>
+
+          <!-- ACCENT BAR -->
+          <div class="gold-bar" id="gold-bar"></div>
+
+          <!-- GUEST ROW - USING PLACEHOLDERS -->
+          <div class="inv-guest-row" id="guest-row">
+            <div class="inv-guest-cell removable" style="position:relative;">
+              <div class="cell-label" contenteditable="true">Guest</div>
+              <div class="cell-value"><strong contenteditable="true" id="f-guest-name">GUEST_NAME_PLACEHOLDER</strong><span contenteditable="true" id="f-guest-details">GUEST_DETAILS_PLACEHOLDER</span></div>
+              <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+            </div>
+            <div class="inv-guest-cell removable" style="position:relative;">
+              <div class="cell-label" contenteditable="true">Stay Period</div>
+              <div class="cell-value"><strong contenteditable="true" id="f-stay-dates">STAY_DATES_PLACEHOLDER</strong><span contenteditable="true" id="f-stay-details">STAY_DETAILS_PLACEHOLDER</span></div>
+              <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+            </div>
+            <div class="inv-guest-cell removable" style="position:relative;">
+              <div class="cell-label" contenteditable="true">Reservation</div>
+              <div class="cell-value"><strong contenteditable="true" id="f-res-id">RES_ID_PLACEHOLDER</strong><span contenteditable="true" id="f-res-details">RES_DETAILS_PLACEHOLDER</span></div>
+              <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+            </div>
+          </div>
+
+          <!-- SECTION 1: ROOM - USING PLACEHOLDER FOR ROWS -->
+          <div class="inv-section removable" id="section-0" style="position:relative;">
+            <div class="sec-title" contenteditable="true">Room Charges</div>
+            <table class="inv-tbl">
+              <thead>
+                <tr>
+                  <th contenteditable="true">Description</th>
+                  <th contenteditable="true">Nights</th>
+                  <th contenteditable="true">Rate / Night</th>
+                  <th contenteditable="true">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-0">
+                ROOM_ROWS_PLACEHOLDER
+              </tbody>
+            </table>
+            <button class="remove-btn" style="right:-22px;top:12px;transform:none;" onclick="this.parentElement.remove()">×</button>
+          </div>
+
+          <!-- CALC ROWS - USING PLACEHOLDER -->
+          <div class="calc-area" id="calc-area">
+            CALC_ROWS_PLACEHOLDER
+          </div>
+
+          <!-- TOTAL BAR - USING PLACEHOLDER -->
+          <div class="total-bar">
+            <div>
+              <div class="total-label" contenteditable="true">Total Amount Due</div>
+              <div style="font-size:10px;opacity:.6;margin-top:2px;letter-spacing:.04em;" contenteditable="true">INR · Inclusive of all taxes</div>
+            </div>
+            <div class="total-amount" contenteditable="true" id="f-total">TOTAL_AMOUNT_PLACEHOLDER</div>
+          </div>
+
+          <!-- REMARKS + FOOTER - USING PLACEHOLDERS -->
+          <div id="remarks-block" style="border-top:1px solid rgba(0,0,0,.08);">
+            <div class="inv-footer" id="inv-footer-inner">
+              <div class="inv-footer-cell removable" style="position:relative;">
+                <div class="footer-label" contenteditable="true">Remarks</div>
+                <div class="remarks-text" contenteditable="true">"Thank you for choosing us. We hope your stay was truly memorable."</div>
+                <div class="paid-stamp" contenteditable="true" id="f-payment-status">PAYMENT_STATUS_PLACEHOLDER</div>
+                <button class="remove-btn" style="right:4px;top:8px;transform:none;" onclick="this.parentElement.remove()">×</button>
+              </div>
+              <div class="inv-footer-cell removable" style="position:relative;" id="inv-footer">
+                <div class="footer-label" contenteditable="true">Payment Information</div>
+                <div class="footer-val" contenteditable="true" id="f-payment-info">PAYMENT_INFO_PLACEHOLDER</div>
+                <button class="remove-btn" style="right:4px;top:8px;transform:none;" onclick="this.parentElement.remove()">×</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var currentTheme = 'gold';
+
+function setTheme(t) {
+    currentTheme = t;
+    
+    // Get the main invoice container
+    var invContainer = document.getElementById('inv-container');
+    if (!invContainer) return;
+    
+    // Remove all existing theme classes
+    invContainer.className = '';
+    
+    // Add the new theme class
+    invContainer.classList.add('theme-' + t);
+    
+    // Update active button styling
+    document.querySelectorAll('.theme-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    console.log('Theme changed to:', t);
+}
+
+function toggleBlock(id, show) {
+  var el = document.getElementById(id) || document.querySelector('.'+id);
+  if(el) el.style.display = show ? '' : 'none';
+}
+
+function toggleCalcRow(cls, show) {
+  document.querySelectorAll('.calc-row.'+cls).forEach(function(el){
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+function syncHotelInfo() {
+  var name = document.getElementById('sb-hotel-name').value;
+  var tag = document.getElementById('sb-hotel-tag').value;
+  var addr = document.getElementById('sb-hotel-addr').value;
+  var gstin = document.getElementById('sb-hotel-gstin').value;
+  var tel = document.getElementById('sb-hotel-tel').value;
+  if(name) document.getElementById('f-hotel-name').textContent = name;
+  if(tag) document.getElementById('f-hotel-tag').textContent = tag;
+  if(addr) document.getElementById('f-hotel-addr').innerHTML = addr + '<br>Tel: ' + tel + ' · GSTIN: ' + gstin;
+  alert('✅ Hotel info updated!');
+}
+
+function syncInvoiceMeta() {
+  var no = document.getElementById('sb-inv-no').value;
+  var date = document.getElementById('sb-inv-date').value;
+  var folio = document.getElementById('sb-inv-folio').value;
+  if(no) document.getElementById('f-inv-no').textContent = no;
+  if(date) document.getElementById('f-inv-date').textContent = date;
+  if(folio) document.getElementById('f-inv-folio').textContent = folio;
+  alert('✅ Invoice details updated!');
+}
+
+function addSection() {
+  var idx = document.querySelectorAll('.inv-section').length;
+  var sec = document.createElement('div');
+  sec.className = 'inv-section removable';
+  sec.id = 'section-' + idx;
+  sec.style.position = 'relative';
+  sec.innerHTML = '<div class="sec-title" contenteditable="true">New Section</div>' +
+    '<table class="inv-tbl"><thead><tr><th contenteditable="true">Description</th><th contenteditable="true">Col 2</th><th contenteditable="true">Col 3</th><th contenteditable="true">Amount</th></tr></thead><tbody id="tbody-' + idx + '">' +
+    '<tr class="removable" style="position:relative;">' +
+    '<td><span contenteditable="true">Item description</span><span class="note" contenteditable="true">Sub-note here</span></td>' +
+    '<td contenteditable="true">1</td>' +
+    '<td contenteditable="true">₹0</td>' +
+    '<td contenteditable="true">₹0</td>' +
+    '<button class="remove-btn" onclick="this.closest(\'tr\').remove()">×</button>' +
+    '</tr>' +
+    '</tbody></table>' +
+    '<button class="remove-btn" style="right:-22px;top:12px;transform:none;" onclick="this.parentElement.remove()">×</button>';
+  var calcArea = document.getElementById('calc-area');
+  calcArea.parentNode.insertBefore(sec, calcArea);
+  var sel = document.getElementById('sb-target-section');
+  var opt = document.createElement('option');
+  opt.value = idx;
+  opt.textContent = 'Section ' + (idx+1) + ' (New)';
+  sel.appendChild(opt);
+}
+
+function addGuestField() {
+  var guestRow = document.getElementById('guest-row');
+  var cell = document.createElement('div');
+  cell.className = 'inv-guest-cell removable';
+  cell.style.position = 'relative';
+  cell.innerHTML = '<div class="cell-label" contenteditable="true">Field Label</div>' +
+    '<div class="cell-value"><strong contenteditable="true">Value</strong><span contenteditable="true">Detail line</span></div>' +
+    '<button class="remove-btn" onclick="this.parentElement.remove()">×</button>';
+  guestRow.appendChild(cell);
+}
+
+function addCalcRow() {
+  var calcArea = document.getElementById('calc-area');
+  var row = document.createElement('div');
+  row.className = 'calc-row removable';
+  row.style.position = 'relative';
+  row.innerHTML = '<span contenteditable="true">New Line Item</span>' +
+    '<span contenteditable="true">₹0</span>' +
+    '<button class="remove-btn" style="right:-20px;" onclick="this.parentElement.remove()">×</button>';
+  calcArea.appendChild(row);
+}
+
+function addFooterCol() {
+  var footer = document.getElementById('inv-footer-inner');
+  var cols = footer.children.length + 1;
+  footer.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)';
+  var cell = document.createElement('div');
+  cell.className = 'inv-footer-cell removable';
+  cell.style.position = 'relative';
+  cell.innerHTML = '<div class="footer-label" contenteditable="true">Column Label</div>' +
+    '<div class="footer-val" contenteditable="true">Content goes here<br>Line two</div>' +
+    '<button class="remove-btn" style="right:4px;top:8px;transform:none;" onclick="this.parentElement.remove()">×</button>';
+  footer.appendChild(cell);
+}
+
+function addRowToSection() {
+  var idx = document.getElementById('sb-target-section').value;
+  var tbody = document.getElementById('tbody-' + idx);
+  if(!tbody) { alert('Section not found'); return; }
+  var desc = document.getElementById('sb-row-desc').value || 'New Item';
+  var c2 = document.getElementById('sb-row-col2').value || '—';
+  var c3 = document.getElementById('sb-row-col3').value || '—';
+  var c4 = document.getElementById('sb-row-col4').value || '₹0';
+  var tr = document.createElement('tr');
+  tr.className = 'removable';
+  tr.style.position = 'relative';
+  tr.innerHTML = '<td><span contenteditable="true">' + desc + '</span><span class="note" contenteditable="true"></span></td>' +
+    '<td contenteditable="true">' + c2 + '</td>' +
+    '<td contenteditable="true">' + c3 + '</td>' +
+    '<td contenteditable="true">' + c4 + '</td>' +
+    '<button class="remove-btn" onclick="this.closest(\'tr\').remove()">×</button>';
+  tbody.appendChild(tr);
+  ['sb-row-desc','sb-row-col2','sb-row-col3','sb-row-col4'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
+}
+
+function saveHTML() {
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hotel Invoice</title>' +
+    document.querySelector('head').innerHTML + '</head><body style="background:#F0EDE8;padding:2rem;">' +
+    document.getElementById('invoice').outerHTML + '</body></html>';
+  var blob = new Blob([html], {type:'text/html'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hotel_invoice_' + currentTheme + '.html';
+  a.click();
+}
+</script>
+</body>
+</html>
