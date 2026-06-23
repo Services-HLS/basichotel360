@@ -1630,39 +1630,69 @@ const Bookings = () => {
     extras += otherServiceCharges;
 
     const baseRoomAmount = booking.amount || 0;
+    const bookedService = booking.service || 0;
     let discountAmount = 0;
     if (checkoutDiscountType === 'percentage') {
       discountAmount = (baseRoomAmount * checkoutDiscountValue) / 100;
     } else if (checkoutDiscountType === 'amount') {
       discountAmount = checkoutDiscountValue;
     }
+    discountAmount = Math.min(Math.max(0, discountAmount), baseRoomAmount);
 
-    const newRoomAmount = baseRoomAmount - discountAmount;
-    const totalService = (booking.service || 0) + extras;
-    const baseForTax = newRoomAmount + totalService;
+    const newRoomAmount = Math.max(0, baseRoomAmount - discountAmount);
+    const totalService = bookedService + extras;
+    const taxableSubtotal = newRoomAmount + totalService;
 
-    const currentCgstRate = booking.cgst && baseRoomAmount > 0 ? (booking.cgst / baseRoomAmount) * 100 : 0;
-    const currentSgstRate = booking.sgst && baseRoomAmount > 0 ? (booking.sgst / baseRoomAmount) * 100 : 0;
-    const currentIgstRate = booking.igst && baseRoomAmount > 0 ? (booking.igst / baseRoomAmount) * 100 : 0;
+    // GST from booking stays fixed when discount is applied; tax on new add-ons only uses booking rates
+    const bookedCgst = booking.cgst || 0;
+    const bookedSgst = booking.sgst || 0;
+    const bookedIgst = booking.igst || 0;
+    const bookedGst = bookedCgst + bookedSgst + bookedIgst;
 
-    const cgst = currentCgstRate > 0 ? (baseForTax * Math.round(currentCgstRate)) / 100 : 0;
-    const sgst = currentSgstRate > 0 ? (baseForTax * Math.round(currentSgstRate)) / 100 : 0;
-    const igst = currentIgstRate > 0 ? (baseForTax * Math.round(currentIgstRate)) / 100 : 0;
+    const originalTaxableBase = baseRoomAmount + bookedService;
+    const cgstRate =
+      originalTaxableBase > 0 ? (bookedCgst / originalTaxableBase) * 100 : 0;
+    const sgstRate =
+      originalTaxableBase > 0 ? (bookedSgst / originalTaxableBase) * 100 : 0;
+    const igstRate =
+      originalTaxableBase > 0 ? (bookedIgst / originalTaxableBase) * 100 : 0;
+
+    const extrasCgst = extras > 0 ? (extras * cgstRate) / 100 : 0;
+    const extrasSgst = extras > 0 ? (extras * sgstRate) / 100 : 0;
+    const extrasIgst = extras > 0 ? (extras * igstRate) / 100 : 0;
+
+    const cgst = bookedCgst + extrasCgst;
+    const sgst = bookedSgst + extrasSgst;
+    const igst = bookedIgst + extrasIgst;
     const gst = cgst + sgst + igst;
-    const estimatedTotal = baseForTax + gst;
+    const estimatedTotal = taxableSubtotal + gst;
 
+    const originalBookingTotal =
+      booking.total ||
+      baseRoomAmount + bookedService + (booking.gst || bookedGst);
     const advancePaid = booking.advance_amount_paid || 0;
     const balanceDue = Math.max(0, estimatedTotal - advancePaid);
 
     return {
       discountAmount,
       newRoomAmount,
+      bookedService,
+      extras,
       totalService,
+      taxableSubtotal,
+      bookedCgst,
+      bookedSgst,
+      bookedIgst,
+      bookedGst,
+      extrasCgst,
+      extrasSgst,
+      extrasIgst,
       cgst,
       sgst,
       igst,
       gst,
       estimatedTotal,
+      originalBookingTotal,
       advancePaid,
       balanceDue,
     };
@@ -7291,6 +7321,11 @@ const Bookings = () => {
                   <h4 className="font-semibold text-sm">Amount Summary</h4>
                   <div className="bg-primary/5 rounded-lg p-4 space-y-2 text-xs">
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Original Booking Total:</span>
+                      <span>₹{checkoutTotals.originalBookingTotal.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Original Room Charge:</span>
                       <span>₹{(checkoutBooking.amount || 0).toLocaleString('en-IN')}</span>
                     </div>
@@ -7301,6 +7336,20 @@ const Bookings = () => {
                           Discount {checkoutDiscountType === 'percentage' ? `(${checkoutDiscountValue}%)` : ''}:
                         </span>
                         <span>- ₹{checkoutTotals.discountAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    {(checkoutDiscountType !== 'none' && checkoutDiscountValue > 0) && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Room after discount:</span>
+                        <span>₹{checkoutTotals.newRoomAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    {checkoutTotals.bookedService > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Service charge (from booking):</span>
+                        <span>₹{checkoutTotals.bookedService.toLocaleString('en-IN')}</span>
                       </div>
                     )}
 
@@ -7318,12 +7367,51 @@ const Bookings = () => {
                       </div>
                     )}
 
-                    {checkoutTotals.gst > 0 && (
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="text-muted-foreground">Subtotal (before tax):</span>
+                      <span>₹{checkoutTotals.taxableSubtotal.toLocaleString('en-IN')}</span>
+                    </div>
+
+                    {checkoutTotals.bookedCgst > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          CGST{checkoutDiscountType !== 'none' && checkoutDiscountValue > 0 ? ' (from booking)' : ''}:
+                        </span>
+                        <span>₹{checkoutTotals.bookedCgst.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {checkoutTotals.bookedSgst > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          SGST{checkoutDiscountType !== 'none' && checkoutDiscountValue > 0 ? ' (from booking)' : ''}:
+                        </span>
+                        <span>₹{checkoutTotals.bookedSgst.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {checkoutTotals.bookedIgst > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          IGST{checkoutDiscountType !== 'none' && checkoutDiscountValue > 0 ? ' (from booking)' : ''}:
+                        </span>
+                        <span>₹{checkoutTotals.bookedIgst.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {checkoutTotals.extras > 0 && (checkoutTotals.extrasCgst + checkoutTotals.extrasSgst + checkoutTotals.extrasIgst) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">GST on add-ons:</span>
+                        <span>₹{(checkoutTotals.extrasCgst + checkoutTotals.extrasSgst + checkoutTotals.extrasIgst).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {checkoutTotals.gst > 0 && checkoutTotals.bookedCgst === 0 && checkoutTotals.bookedSgst === 0 && checkoutTotals.bookedIgst === 0 && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">GST:</span>
                         <span>₹{checkoutTotals.gst.toLocaleString('en-IN')}</span>
                       </div>
                     )}
+
+                    <p className="text-[10px] text-muted-foreground leading-snug">
+                      Discount reduces the room charge only. GST from the original booking stays the same. New add-ons (breakfast, etc.) are taxed at the same rate as at booking.
+                    </p>
 
                     <div className="flex justify-between font-bold text-sm border-t pt-2 mt-2 text-primary">
                       <span>Estimated Total Bill:</span>

@@ -16,7 +16,7 @@ const WhatsAppService = require('../services/whatsappService');
 const EmailService = require('../services/emailService');
 const SchedulerService = require('../services/schedulerService');
 const { isBasicHotelPlan } = require('../utils/planUtils');
-const { getPaymentBreakdown } = require('../utils/paymentBreakdown');
+const { getPaymentBreakdown, parseCheckoutPaid } = require('../utils/paymentBreakdown');
 const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
 
 const fs = require('fs');
@@ -62,6 +62,61 @@ const getBase64Logo = () => {
 const companyLogoBase64 = getBase64Logo();
 console.log('Company logo loaded:', companyLogoBase64 ? 'Yes' : 'No');
 
+const ONLINE_PAYMENT_MODES = new Set(['online', 'upi', 'card', 'bank_transfer']);
+
+async function recordBookingAdvancePayment({
+  bookingId,
+  hotelId,
+  userId,
+  customerId,
+  customerName,
+  advancePaid,
+  advancePaymentMethod,
+  paymentMethod,
+  transactionId,
+  roomId,
+  fromDate,
+  toDate,
+}) {
+  const advance = parseFloat(advancePaid) || 0;
+
+  if (advance > 0) {
+    if (ONLINE_PAYMENT_MODES.has(advancePaymentMethod)) {
+      const txnId =
+        transactionId || `TXN-ADV-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      await Transaction.create({
+        hotel_id: hotelId,
+        booking_id: bookingId,
+        customer_id: customerId || null,
+        transaction_id: txnId,
+        amount: advance,
+        currency: 'INR',
+        payment_method: 'online',
+        payment_gateway: 'upi',
+        status: 'success',
+        status_message: 'Advance payment received at booking',
+        metadata: {
+          type: 'booking_advance',
+          room_id: roomId,
+          from_date: fromDate,
+          to_date: toDate,
+          customer_name: customerName,
+        },
+      });
+      console.log(`✅ Online advance transaction created: ₹${advance}`);
+      return;
+    }
+
+    await Collection.createFromCashBooking(bookingId, hotelId, userId);
+    console.log('✅ Cash advance collection created');
+    return;
+  }
+
+  if (paymentMethod === 'cash') {
+    await Collection.createFromCashBooking(bookingId, hotelId, userId);
+    console.log('✅ Auto-created collection for cash booking');
+  }
+}
 
 const bookingController = {
 
@@ -389,14 +444,26 @@ const bookingController = {
       }
 
       // ===========================================
-      // 7. CREATE COLLECTION FOR CASH PAYMENT
+      // 7. RECORD ADVANCE / CASH PAYMENT IN COLLECTIONS
       // ===========================================
-      if (payment_method === 'cash' && status === 'booked') {
+      if (status === 'booked') {
         try {
-          await Collection.createFromCashBooking(bookingId, hotelId, req.user.userId);
-          console.log('✅ Auto-created collection for cash booking');
+          await recordBookingAdvancePayment({
+            bookingId,
+            hotelId,
+            userId: req.user.userId,
+            customerId: finalCustomerId,
+            customerName: customer_name,
+            advancePaid: req.body.advance_amount_paid,
+            advancePaymentMethod: req.body.advance_payment_method || 'cash',
+            paymentMethod: payment_method,
+            transactionId: transaction_id,
+            roomId: room_id,
+            fromDate: from_date,
+            toDate: to_date,
+          });
         } catch (collectionError) {
-          console.error('❌ Failed to auto-create collection:', collectionError);
+          console.error('❌ Failed to record booking payment:', collectionError);
         }
       }
 
@@ -943,6 +1010,49 @@ const bookingController = {
           const Room = require('../models/Room');
           await Room.updateStatus(roomId, hotelId, 'available');
           console.log(`✅ Room ${roomId} set to available`);
+        }
+      }
+
+      // Record cash collected at checkout (balance after advance at booking)
+      if (
+        bookingData.status === 'completed' &&
+        currentBooking.status !== 'completed'
+      ) {
+        const paymentMethod = bookingData.payment_method || currentBooking.payment_method;
+        if (paymentMethod === 'cash') {
+          const prevPaid = parseFloat(currentBooking.advance_amount_paid) || 0;
+          const newPaid = parseFloat(
+            bookingData.advance_amount_paid !== undefined
+              ? bookingData.advance_amount_paid
+              : currentBooking.advance_amount_paid
+          ) || 0;
+
+          let checkoutAmount = parseCheckoutPaid(bookingData.special_requests || '');
+          if (checkoutAmount <= 0) {
+            checkoutAmount = Math.max(0, Math.round((newPaid - prevPaid) * 100) / 100);
+          }
+
+          if (checkoutAmount > 0) {
+            try {
+              const [customerRows] = await pool.execute(
+                `SELECT c.name FROM bookings b
+                 LEFT JOIN customers c ON b.customer_id = c.id
+                 WHERE b.id = ? AND b.hotel_id = ?`,
+                [id, hotelId]
+              );
+              const customerName = customerRows[0]?.name || 'Guest';
+              await Collection.createFromCheckoutPayment(
+                id,
+                hotelId,
+                req.user.userId,
+                checkoutAmount,
+                customerName
+              );
+              console.log(`✅ Checkout collection created: ₹${checkoutAmount}`);
+            } catch (collectionError) {
+              console.error('❌ Failed to create checkout collection:', collectionError);
+            }
+          }
         }
       } else if (bookingData.status === 'booked' && currentBooking.status !== 'booked') {
         const roomId = bookingData.room_id || currentBooking.room_id;
@@ -4657,18 +4767,34 @@ const bookingController = {
               console.log(`✅ Advance booking ${bookingData.advance_booking_id} marked as converted`);
             }
 
-            // Create collection for cash payment
-            if (bookingPayload.payment_method === 'cash' && bookingId) {
+            // Record advance (cash → collections, online → transactions)
+            if (bookingId) {
               try {
-                const Collection = require('../models/Collection');
-                await Collection.createFromCashBooking(bookingId, hotelId, userId);
-                console.log(`💰 Collection created for booking ${bookingId}`);
+                await recordBookingAdvancePayment({
+                  bookingId,
+                  hotelId,
+                  userId,
+                  customerId: finalCustomerId,
+                  customerName: bookingData.customer_name,
+                  advancePaid: bookingPayload.advance_amount_paid,
+                  advancePaymentMethod:
+                    bookingData.advance_payment_method || 'cash',
+                  paymentMethod: bookingPayload.payment_method,
+                  transactionId: bookingPayload.transaction_id,
+                  roomId: bookingData.room_id,
+                  fromDate: bookingData.from_date,
+                  toDate: bookingData.to_date,
+                });
               } catch (collectionError) {
                 console.error('Collection creation error:', collectionError);
               }
             }
-            // Create transaction for online payment
-            if (bookingPayload.payment_method === 'online' && bookingId) {
+            // Create transaction for full online payment (no advance recorded separately)
+            if (
+              bookingPayload.payment_method === 'online' &&
+              bookingId &&
+              !(parseFloat(bookingPayload.advance_amount_paid) > 0)
+            ) {
               try {
                 const Transaction = require('../models/Transaction');
                 const generatedTransactionId = bookingPayload.transaction_id || `TXN${Date.now()}${Math.floor(Math.random() * 1000)}-${bookingData.room_id}`;

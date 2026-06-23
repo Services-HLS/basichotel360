@@ -137,6 +137,64 @@ class Collection {
 
         const [onlineRows] = await pool.execute(onlineQuery, onlineParams);
         results.push(...onlineRows);
+
+        // Online advance bookings (not yet converted to regular booking)
+        let onlineAdvanceQuery = `
+          SELECT 
+            CONCAT('ADV-', ab.id) as id,
+            ab.id as advance_booking_id,
+            ab.booking_id,
+            DATE(ab.created_at) as collection_date,
+            ab.payment_method as payment_mode,
+            ab.advance_amount as amount,
+            ab.transaction_id,
+            CONCAT('Advance booking (online) - ', COALESCE(ab.purpose_of_visit, 'Room Booking')) as remarks,
+            ab.created_by as collected_by,
+            'not_applicable' as handover_status,
+            0 as handover_amount,
+            NULL as handover_date,
+            NULL as handover_to,
+            '' as handover_remarks,
+            ab.created_at,
+            COALESCE(c.name, 'Advance Customer') as customer_name,
+            c.phone as customer_phone,
+            r.room_number,
+            u.name as collected_by_user_name,
+            ab.total as booking_total,
+            ab.payment_method as booking_payment_method,
+            ab.payment_status as booking_payment_status,
+            'advance_bookings' as source
+          FROM advance_bookings ab
+          LEFT JOIN customers c ON ab.customer_id = c.id
+          LEFT JOIN rooms r ON ab.room_id = r.id
+          LEFT JOIN users u ON ab.created_by = u.id
+          WHERE ab.hotel_id = ?
+            AND ab.advance_amount > 0
+            AND ab.payment_method IN ('online', 'upi', 'card', 'bank_transfer')
+            AND ab.status <> 'converted'
+        `;
+        const onlineAdvanceParams = [hotelId];
+
+        if (startDate && endDate && startDate.trim() !== "" && endDate.trim() !== "") {
+          onlineAdvanceQuery += ` AND DATE(ab.created_at) BETWEEN ? AND ?`;
+          onlineAdvanceParams.push(startDate, endDate);
+        }
+
+        if (searchTerm) {
+          onlineAdvanceQuery += ` AND (c.name LIKE ? OR r.room_number LIKE ? OR ab.transaction_id LIKE ?)`;
+          onlineAdvanceParams.push(searchTerm, searchTerm, searchTerm);
+        }
+
+        const [onlineAdvanceRows] = await pool.execute(
+          onlineAdvanceQuery,
+          onlineAdvanceParams,
+        );
+        results.push(
+          ...onlineAdvanceRows.map((row) => ({
+            ...row,
+            id: "adv_" + row.advance_booking_id,
+          })),
+        );
       }
 
       // ── PART 3: Advance Bookings (ONLY show Cash in list if it matches Card 1) ──
@@ -466,6 +524,16 @@ class Collection {
 
             UNION ALL
 
+            -- Advance Bookings (Online)
+            SELECT COALESCE(SUM(advance_amount), 0) AS online_amount
+            FROM advance_bookings
+            WHERE hotel_id = ?
+              AND payment_method IN ('online', 'upi', 'card', 'bank_transfer')
+              AND status <> 'converted'
+            ${startDate && endDate ? "AND DATE(created_at) BETWEEN ? AND ?" : ""}
+
+            UNION ALL
+
             -- Function Booking Amounts (Transaction Amount)
             SELECT COALESCE(SUM(transaction_amount), 0) AS online_amount
             FROM function_booking_amounts
@@ -483,7 +551,7 @@ class Collection {
       `;
 
       const unifiedOnlineParams = [];
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         unifiedOnlineParams.push(hotelId);
         if (startDate && endDate && startDate.trim() !== "" && endDate.trim() !== "") {
           unifiedOnlineParams.push(startDate, endDate);
@@ -741,7 +809,31 @@ class Collection {
     }
   }
 
-  // Create collection from cash booking - (Keep as is)
+  /** Cash collected at booking time (advance only when balance is due at checkout). */
+  static getCashCollectionAmount(booking = {}) {
+    const total = parseFloat(booking.total) || 0;
+    const advancePaid = parseFloat(booking.advance_amount_paid) || 0;
+    const remainingRaw = parseFloat(booking.remaining_amount);
+    const remaining = Number.isFinite(remainingRaw)
+      ? Math.max(0, remainingRaw)
+      : Math.max(0, total - advancePaid);
+    const paymentStatus = booking.payment_status || "pending";
+
+    if (advancePaid > 0) {
+      if (remaining > 0.01) {
+        return { amount: advancePaid, label: "advance payment" };
+      }
+      return { amount: advancePaid, label: "payment" };
+    }
+
+    if (paymentStatus === "completed" || paymentStatus === "partial") {
+      return { amount: total, label: "payment" };
+    }
+
+    return { amount: 0, label: null };
+  }
+
+  // Create collection from cash booking
   static async createFromCashBooking(bookingId, hotelId, userId) {
     console.log("💰 [Auto-Collection] Booking:", bookingId, "Hotel:", hotelId, "User:", userId);
 
@@ -750,6 +842,8 @@ class Collection {
         `
         SELECT 
           b.total,
+          b.advance_amount_paid,
+          b.remaining_amount,
           b.payment_method,
           b.payment_status,
           c.name as customer_name
@@ -766,6 +860,12 @@ class Collection {
       }
 
       const booking = bookingRows[0];
+      const { amount, label } = Collection.getCashCollectionAmount(booking);
+
+      if (amount <= 0) {
+        console.log("⏭️ [Auto-Collection] Skipped — no cash collected at booking");
+        return null;
+      }
 
       const insertQuery = `
         INSERT INTO collections (
@@ -779,18 +879,54 @@ class Collection {
         bookingId,
         new Date().toISOString().split("T")[0],
         "cash",
-        booking.total,
-        `Auto-collection for booking #${bookingId} - ${booking.customer_name || "Guest"}`,
+        amount,
+        `Auto-collection (${label}) for booking #${bookingId} - ${booking.customer_name || "Guest"}`,
         userId,
         "pending",
         userId,
       ];
 
       const [result] = await pool.execute(insertQuery, insertParams);
-      console.log("✅ [Auto-Collection] Created! ID:", result.insertId);
+      console.log("✅ [Auto-Collection] Created! ID:", result.insertId, "Amount:", amount);
       return result.insertId;
     } catch (error) {
       console.error("❌ [Auto-Collection] Error:", error.message);
+      return null;
+    }
+  }
+
+  // Create collection for cash paid at checkout
+  static async createFromCheckoutPayment(bookingId, hotelId, userId, amount, customerName = "Guest") {
+    const amountNum = parseFloat(amount) || 0;
+    if (amountNum <= 0) return null;
+
+    console.log("💰 [Checkout-Collection] Booking:", bookingId, "Amount:", amountNum);
+
+    try {
+      const insertQuery = `
+        INSERT INTO collections (
+          hotel_id, booking_id, collection_date, payment_mode,
+          amount, remarks, collected_by, handover_status, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      const insertParams = [
+        hotelId,
+        bookingId,
+        new Date().toISOString().split("T")[0],
+        "cash",
+        amountNum,
+        `Checkout payment for booking #${bookingId} - ${customerName}`,
+        userId,
+        "pending",
+        userId,
+      ];
+
+      const [result] = await pool.execute(insertQuery, insertParams);
+      console.log("✅ [Checkout-Collection] Created! ID:", result.insertId);
+      return result.insertId;
+    } catch (error) {
+      console.error("❌ [Checkout-Collection] Error:", error.message);
       return null;
     }
   }

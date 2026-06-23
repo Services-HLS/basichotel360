@@ -5309,10 +5309,18 @@ export default function BookingForm({
           discount_type: discountType,
           advance_amount_paid: advancePaid,
           remaining_amount: remainingAmount,
+          advance_payment_method:
+            recordAdvancePayment && advancePaid > 0
+              ? advancePaymentMethodAtBooking
+              : undefined,
         }),
         advance_booking_id: advanceBookingData?.id || null,
         advance_amount_paid: advancePaid,
         remaining_amount: remainingAmount,
+        advance_payment_method:
+          recordAdvancePayment && advancePaid > 0
+            ? advancePaymentMethodAtBooking
+            : undefined,
         conversion_payment_method: deferPaymentToCheckout ? resolvedPaymentMethod : paymentMethod,
         conversion_payment_status: deferPaymentToCheckout ? finalPaymentStatus : paymentStatus
       };

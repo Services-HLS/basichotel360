@@ -1260,7 +1260,7 @@ const advanceBookingController = {
                             bookingId,
                             new Date().toISOString().split('T')[0],
                             'cash',
-                            remainingAmount,
+                            advancePaid,
                             `Advance payment from booking #${advanceBooking.invoice_number || advanceBooking.id} (converted)`,
                             userId,
                             'pending',
