@@ -1325,7 +1325,7 @@
 //         cgst: includeCGST ? charges.cgst : 0,
 //         sgst: includeSGST ? charges.sgst : 0,
 //         total: charges.total,
-//         guests: formData.guests,
+//         guests: getTotalGuests(),
 //         paymentMethod: paymentMethod || 'cash',
 //         paymentStatus: paymentStatus,
 //         idType: formData.idType,
@@ -1410,7 +1410,7 @@
 //           id_type: formData.idType,
 //           id_number: formData.idNumber,
 //           id_image: idImages.length > 0 ? idImages[0] : null,
-//           guests: formData.guests,
+//           guests: getTotalGuests(),
 //           special_requests: formData.specialRequests,
 //           referral_by: formData.referralBy,
 //           referral_amount: formData.referralAmount,
@@ -4106,6 +4106,8 @@ export default function BookingForm({
 
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
   const userPlan = currentUser?.plan || 'basic';
+  /** Database room bookings: collect payment at checkout, not on the booking form */
+  const deferPaymentToCheckout = userSource === 'database' && mode === 'book';
 
   const navigate = useNavigate();
 
@@ -4186,6 +4188,8 @@ export default function BookingForm({
     checkInTime: '',
     checkOutDate: initialDates.to,
     checkOutTime: '',
+    adults: 1,
+    children: 0,
     guests: 1,
     specialRequests: '',
     address: '',
@@ -4330,10 +4334,10 @@ export default function BookingForm({
   }, [userSource, paymentMethod]);
 
   useEffect(() => {
-    if (activeStep === 3 && userPlan === 'basic' && !paymentMethod) {
+    if (activeStep === 3 && userPlan === 'basic' && !paymentMethod && !deferPaymentToCheckout) {
       setPaymentMethod('cash');
     }
-  }, [activeStep, paymentMethod, userPlan]);
+  }, [activeStep, paymentMethod, userPlan, deferPaymentToCheckout]);
 
   // Add this new useEffect
   useEffect(() => {
@@ -4515,6 +4519,8 @@ export default function BookingForm({
       const toTime = advanceData.to_time || advanceData.toTime || advanceData.checkOutTime || '12:00';
 
       const guests = advanceData.guests || 1;
+      const adults = Number(advanceData.adults) || guests || 1;
+      const children = Number(advanceData.children) || 0;
       const specialRequests = advanceData.special_requests || advanceData.specialRequests || '';
 
       const address = advanceData.address || '';
@@ -4539,7 +4545,9 @@ export default function BookingForm({
         checkInTime: fromTime,
         checkOutDate: formatDateForInput(toDate) || defaultCheckOut,
         checkOutTime: toTime,
-        guests: guests,
+        adults,
+        children,
+        guests: adults + children,
         specialRequests: specialRequests,
         address: address,
         city: city,
@@ -4696,6 +4704,9 @@ export default function BookingForm({
   const totalAdvancePaid = getTotalAdvancePaid();
   const balanceDue = getBalanceDue();
 
+  const getTotalGuests = () =>
+    Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0));
+
   const handleChange = (field: string, value: string | number) => {
     if (field === 'idNumber' && typeof value === 'string') {
       let maxLength = 16;
@@ -4709,6 +4720,23 @@ export default function BookingForm({
       }
 
       value = value.slice(0, maxLength);
+    }
+
+    if (field === 'adults' || field === 'children') {
+      const num = Math.max(0, Number(value) || 0);
+      setFormData((prev) => {
+        const adults =
+          field === 'adults' ? Math.max(1, num || 1) : Number(prev.adults) || 1;
+        const children =
+          field === 'children' ? num : Number(prev.children) || 0;
+        return {
+          ...prev,
+          adults,
+          children,
+          guests: Math.max(1, adults + children),
+        };
+      });
+      return;
     }
 
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -5024,6 +5052,10 @@ export default function BookingForm({
         return true;
 
       case 3:
+        if (deferPaymentToCheckout) {
+          return true;
+        }
+
         if (mode === 'book' && balanceDue <= 0) {
           if (!paymentMethod) setPaymentMethod('cash');
           setPaymentStatus('completed');
@@ -5139,7 +5171,7 @@ export default function BookingForm({
         cgst: includeCGST ? charges.cgst : 0,
         sgst: includeSGST ? charges.sgst : 0,
         total: charges.total,
-        guests: formData.guests,
+        guests: getTotalGuests(),
         paymentMethod: paymentMethod || 'cash',
         paymentStatus: paymentStatus,
         idType: formData.idType,
@@ -5209,11 +5241,26 @@ export default function BookingForm({
       }
 
       let finalPaymentStatus;
-      if (paymentMethod === 'cash') {
+      if (deferPaymentToCheckout) {
+        finalPaymentStatus =
+          remainingAmount <= 0 && advancePaid > 0 ? 'completed' : 'pending';
+      } else if (paymentMethod === 'cash') {
         finalPaymentStatus = 'completed';
       } else {
         finalPaymentStatus = paymentStatus;
       }
+
+      const resolvedPaymentMethod =
+        deferPaymentToCheckout && remainingAmount > 0
+          ? 'cash'
+          : paymentMethod || 'cash';
+
+      const specialRequestsWithAdvance =
+        advancePaid > 0
+          ? [formData.specialRequests, `Booking advance: ₹${advancePaid.toFixed(2)}`]
+              .filter(Boolean)
+              .join('\n')
+          : formData.specialRequests;
 
       const payload = {
         ...(isConversion ? {} : {
@@ -5233,13 +5280,15 @@ export default function BookingForm({
           igst: (taxType === 'igst' && includeIGST) ? charges.igst : 0,
           gst: (taxType === 'cgst_sgst' ? charges.cgst + charges.sgst : charges.igst),
           total: totalAmount,
-          payment_method: paymentMethod,
+          payment_method: resolvedPaymentMethod,
           payment_status: finalPaymentStatus,
           id_type: formData.idType,
           id_number: formData.idNumber,
           id_image: idImages.length > 0 ? idImages[0] : null,
-          guests: formData.guests,
-          special_requests: formData.specialRequests,
+          guests: getTotalGuests(),
+          adults: Number(formData.adults) || 1,
+          children: Number(formData.children) || 0,
+          special_requests: specialRequestsWithAdvance,
           referral_by: formData.referralBy,
           referral_amount: formData.referralAmount,
           address: formData.address || '',
@@ -5264,8 +5313,8 @@ export default function BookingForm({
         advance_booking_id: advanceBookingData?.id || null,
         advance_amount_paid: advancePaid,
         remaining_amount: remainingAmount,
-        conversion_payment_method: paymentMethod,
-        conversion_payment_status: paymentStatus
+        conversion_payment_method: deferPaymentToCheckout ? resolvedPaymentMethod : paymentMethod,
+        conversion_payment_status: deferPaymentToCheckout ? finalPaymentStatus : paymentStatus
       };
 
       console.log('Submitting to endpoint:', endpoint);
@@ -6091,27 +6140,52 @@ export default function BookingForm({
                       />
                     </div>
 
-                    {/* Guests */}
-                    <div className="space-y-2">
-                      <Label htmlFor="guests" className="flex items-center gap-2 text-sm font-medium">
+                    {/* Guests — adults & children */}
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="flex items-center gap-2 text-sm font-medium">
                         <Users className="h-4 w-4 text-gray-500" />
-                        Number of Guests
+                        Guests
                       </Label>
-                      <Select
-                        value={formData.guests.toString()}
-                        onValueChange={(value) => handleChange('guests', parseInt(value))}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Select guests" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4].map(num => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num} {num === 1 ? 'Person' : 'Persons'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="adults" className="text-xs text-muted-foreground">
+                            Adults
+                          </Label>
+                          <Input
+                            id="adults"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={formData.adults}
+                            onChange={(e) =>
+                              handleChange('adults', parseInt(e.target.value, 10) || 1)
+                            }
+                            className="h-10"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="children" className="text-xs text-muted-foreground">
+                            Children
+                          </Label>
+                          <Input
+                            id="children"
+                            type="number"
+                            min={0}
+                            max={20}
+                            value={formData.children}
+                            onChange={(e) =>
+                              handleChange('children', parseInt(e.target.value, 10) || 0)
+                            }
+                            className="h-10"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Total guests: <strong>{getTotalGuests()}</strong>
+                        {formData.children > 0
+                          ? ` (${formData.adults} adult${formData.adults !== 1 ? 's' : ''}, ${formData.children} child${formData.children !== 1 ? 'ren' : ''})`
+                          : ''}
+                      </p>
                     </div>
                   </div>
 
@@ -7109,6 +7183,18 @@ export default function BookingForm({
                   <strong>Full amount paid as advance.</strong> No additional payment is required. Click Confirm Booking to complete.
                 </AlertDescription>
               </Alert>
+            ) : deferPaymentToCheckout ? (
+              <Alert className="bg-blue-50 border-blue-200">
+                <Info className="h-5 w-5 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  <strong>Payment at checkout.</strong> Cash or online payment will be collected when the guest checks out.
+                  {balanceDue > 0 && (
+                    <span className="block mt-1">
+                      Balance due at checkout: <strong>₹{balanceDue.toFixed(2)}</strong>
+                    </span>
+                  )}
+                </AlertDescription>
+              </Alert>
             ) : (
               <>
             <div className="flex items-center justify-between gap-2">
@@ -7534,7 +7620,11 @@ export default function BookingForm({
                 <div className="flex justify-between items-center mb-1 text-sm">
                   <span className="text-muted-foreground">Payment:</span>
                   <span className="font-medium">
-                    {paymentMethod === 'online' ? 'Online (QR)' : 'Cash at hotel'}
+                    {deferPaymentToCheckout
+                      ? 'At checkout'
+                      : paymentMethod === 'online'
+                        ? 'Online (QR)'
+                        : 'Cash at hotel'}
                   </span>
                 </div>
 
@@ -7543,7 +7633,11 @@ export default function BookingForm({
                   <div>
                     <div className="font-bold text-base">Total</div>
                     <div className="text-xs text-muted-foreground">
-                      {paymentMethod === 'online' ? 'To be paid online' : 'To be paid at hotel'}
+                      {deferPaymentToCheckout
+                        ? 'To be collected at checkout'
+                        : paymentMethod === 'online'
+                          ? 'To be paid online'
+                          : 'To be paid at hotel'}
                       {totalAdvancePaid > 0 && (
                         <span className="block text-xs text-orange-600">
                           (Advance paid: ₹{totalAdvancePaid.toFixed(2)})
@@ -7586,7 +7680,10 @@ export default function BookingForm({
                 onClick={handleSubmit}
                 disabled={
                   isSubmitting ||
-                  (balanceDue > 0 && paymentMethod === 'online' && paymentStatus !== 'completed')
+                  (!deferPaymentToCheckout &&
+                    balanceDue > 0 &&
+                    paymentMethod === 'online' &&
+                    paymentStatus !== 'completed')
                 }
                 className="h-11 flex-1 bg-green-600 hover:bg-green-700 sm:flex-none sm:min-w-[10rem]"
               >
@@ -7595,7 +7692,10 @@ export default function BookingForm({
                     <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
                     <span className="truncate">Saving…</span>
                   </>
-                ) : balanceDue > 0 && paymentMethod === 'online' && paymentStatus !== 'completed' ? (
+                ) : !deferPaymentToCheckout &&
+                  balanceDue > 0 &&
+                  paymentMethod === 'online' &&
+                  paymentStatus !== 'completed' ? (
                   <span className="truncate text-xs sm:text-sm">Pay first</span>
                 ) : (
                   <span className="truncate">Confirm booking</span>

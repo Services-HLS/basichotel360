@@ -47,7 +47,7 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
     if (open) {
       fetchEmployees();
       if (salary) {
-        setFormData({
+        const loaded = {
           user_id: salary.user_id?.toString() || '',
           employee_name: salary.employee_name,
           designation: salary.designation,
@@ -55,12 +55,14 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
           basic_salary: salary.basic_salary.toString(),
           allowances: salary.allowances.toString(),
           deductions: salary.deductions.toString(),
-          net_salary: salary.net_salary.toString(),
+          net_salary: '',
           payment_date: salary.payment_date,
           payment_method: salary.payment_method,
           status: salary.status,
           remarks: salary.remarks || ''
-        });
+        };
+        loaded.net_salary = formatNetSalary(computeNetSalary(loaded));
+        setFormData(loaded);
       } else {
         setFormData({
           user_id: '',
@@ -109,13 +111,27 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
     }
   };
 
-  const calculateNetSalary = () => {
-    const basic = parseFloat(formData.basic_salary) || 0;
-    const allowances = parseFloat(formData.allowances) || 0;
-    const deductions = parseFloat(formData.deductions) || 0;
+  const computeNetSalary = (data: {
+    basic_salary: string;
+    allowances: string;
+    deductions: string;
+  }) => {
+    const basic = parseFloat(data.basic_salary) || 0;
+    const allowances = parseFloat(data.allowances) || 0;
+    const deductions = parseFloat(data.deductions) || 0;
     const net = basic + allowances - deductions;
-    return net;
+    return Math.round(net * 100) / 100;
   };
+
+  const formatNetSalary = (net: number) =>
+    Number.isFinite(net) ? net.toFixed(2) : '';
+
+  const calculateNetSalary = () =>
+    computeNetSalary({
+      basic_salary: formData.basic_salary,
+      allowances: formData.allowances,
+      deductions: formData.deductions,
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,10 +150,6 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
     setLoading(true);
     try {
       const token = localStorage.getItem('authToken');
-      // const url = salary 
-      //   ? `http://localhost:3001/api/salaries/${salary.id}`
-      //   : 'http://localhost:3001/api/salaries';
-
       const url =salary
        ?`${backendUrl}/salaries/${salary.id}`
        :`${backendUrl}/salaries`;
@@ -146,7 +158,10 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
       
       const requestData = {
         ...formData,
-        net_salary: netSalary.toString()
+        basic_salary: (parseFloat(formData.basic_salary) || 0).toString(),
+        allowances: (parseFloat(formData.allowances) || 0).toString(),
+        deductions: (parseFloat(formData.deductions) || 0).toString(),
+        net_salary: netSalary.toFixed(2),
       };
       
       const response = await fetch(url, {
@@ -182,13 +197,13 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
   };
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Recalculate net salary when relevant fields change
-    if (['basic_salary', 'allowances', 'deductions'].includes(field)) {
-      const netSalary = calculateNetSalary();
-      setFormData(prev => ({ ...prev, net_salary: netSalary.toString() }));
-    }
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (['basic_salary', 'allowances', 'deductions'].includes(field)) {
+        next.net_salary = formatNetSalary(computeNetSalary(next));
+      }
+      return next;
+    });
   };
 
   const paymentMethods = [
@@ -316,12 +331,15 @@ const SalaryForm: React.FC<SalaryFormProps> = ({ open, onClose, onSuccess, salar
               <Label htmlFor="net_salary">Net Salary (₹)</Label>
               <Input
                 id="net_salary"
-                type="number"
-                step="0.01"
+                type="text"
                 value={formData.net_salary}
                 readOnly
                 className="font-bold text-green-600"
               />
+              <p className="text-xs text-muted-foreground">
+                Basic + Allowances − Deductions ={' '}
+                {formatNetSalary(calculateNetSalary()) || '0.00'}
+              </p>
             </div>
             
             <div className="space-y-2">

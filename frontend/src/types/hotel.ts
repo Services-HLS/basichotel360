@@ -82,7 +82,8 @@ export interface Hotel {
   permissions?: string[]; // Array of permission strings
   hotel_id?: number; // For database users
   hotelName?: string; // Display name
-  hotelPlan?: string; // 'basic' or 'pro'
+  plan?: string; // User/hotel plan slug (basic, pro, etc.)
+  hotelPlan?: string; // 'basic' or 'pro' (DB hotels.plan: base/free/pro)
   source?: 'database' | 'google_sheets'; // Where user data comes from
   spreadsheetId?: string; // For Google Sheets users
   token?: string; // JWT token

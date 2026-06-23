@@ -124,6 +124,8 @@ export default function AdvanceBookingForm({
         checkInTime: '14:00',
         checkOutDate: '',
         checkOutTime: '',
+        adults: 1,
+        children: 0,
         guests: 1,
         specialRequests: '',
         address: '',
@@ -305,6 +307,8 @@ export default function AdvanceBookingForm({
             checkInTime: '14:00',
             checkOutDate: '',
             checkOutTime: '',
+            adults: 1,
+            children: 0,
             guests: 1,
             specialRequests: '',
             address: '',
@@ -762,7 +766,9 @@ export default function AdvanceBookingForm({
                 to_date: finalCheckOutDate,
                 from_time: formData.checkInTime,
                 to_time: finalCheckOutTime || '12:00',
-                guests: Number(formData.guests) || 1,
+                guests: Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0)),
+                adults: Number(formData.adults) || 1,
+                children: Number(formData.children) || 0,
                 amount: Number(charges.baseAmount) || 0,
                 advance_amount: Number(advanceAmount) || 0,
                 remaining_amount: Number(charges.total - advanceAmount) || 0,
@@ -1086,24 +1092,52 @@ export default function AdvanceBookingForm({
 
                         {/* Guests */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
+                            <div className="space-y-2 col-span-2">
                                 <Label className="flex items-center gap-2">
                                     <Users className="h-4 w-4" />
                                     Guests
                                 </Label>
-                                <Select
-                                    value={formData.guests.toString()}
-                                    onValueChange={(val) => setFormData({ ...formData, guests: parseInt(val) })}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {[1, 2, 3, 4].map(n => (
-                                            <SelectItem key={n} value={n.toString()}>{n} {n === 1 ? 'Person' : 'Persons'}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-muted-foreground">Adults</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={20}
+                                            value={formData.adults}
+                                            onChange={(e) => {
+                                                const adults = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                                const children = Number(formData.children) || 0;
+                                                setFormData({
+                                                    ...formData,
+                                                    adults,
+                                                    guests: adults + children,
+                                                });
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-muted-foreground">Children</Label>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            max={20}
+                                            value={formData.children}
+                                            onChange={(e) => {
+                                                const children = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                const adults = Number(formData.adults) || 1;
+                                                setFormData({
+                                                    ...formData,
+                                                    children,
+                                                    guests: adults + children,
+                                                });
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Total: {Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0))} guest(s)
+                                </p>
                             </div>
                         </div>
 

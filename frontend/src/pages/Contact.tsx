@@ -21,12 +21,12 @@ import {
   Send, 
   Loader2, 
   Globe, 
-  MessageSquare, 
   Building2,
   ExternalLink,
   Info
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import WhatsAppFloatingButton, { WhatsAppIcon, WHATSAPP_URL } from '@/components/WhatsAppFloatingButton';
 
 export default function Contact() {
   const { toast } = useToast();
@@ -148,6 +148,28 @@ export default function Contact() {
 
                 <Separator />
 
+                {/* WhatsApp */}
+                <div className="group flex items-start gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="mt-1 p-2 bg-[#25D366]/15 rounded-full text-[#25D366]">
+                    <WhatsAppIcon className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-sm text-foreground">WhatsApp</h4>
+                    <a
+                      href={WHATSAPP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-[#128C7E] transition-colors flex items-center gap-1 group-hover:underline"
+                    >
+                      Chat with us on WhatsApp
+                      <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                    <p className="text-xs text-muted-foreground">+(91) 77957 91587</p>
+                  </div>
+                </div>
+
+                <Separator />
+
                 {/* Phone */}
                 <div className="group flex items-start gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                   <div className="mt-1 p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
@@ -182,25 +204,36 @@ export default function Contact() {
                 </div>
 
                 {/* Canada Location */}
-                <div className="relative pl-4 border-l-2 border-red-600">
+                {/* <div className="relative pl-4 border-l-2 border-red-600">
                   <h5 className="font-semibold text-sm mb-1 text-foreground">Canada Office</h5>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     238 Fleetwood Dr Oshawa,<br />
                     L1k3E7, Ontario, Canada
                   </p>
-                </div>
+                </div> */}
 
               </CardContent>
             </Card>
 
             {/* Support Highlight */}
-            <div className="bg-primary/5 rounded-xl p-4 border border-primary/10 flex items-start gap-3">
-              <MessageSquare className="w-5 h-5 text-primary mt-0.5" />
+            <div className="bg-[#25D366]/10 rounded-xl p-4 border border-[#25D366]/20 flex items-start gap-3">
+              <div className="p-2 bg-[#25D366] rounded-full text-white shrink-0">
+                <WhatsAppIcon className="w-5 h-5" />
+              </div>
               <div>
-                <h4 className="font-semibold text-sm text-primary mb-1">Need Quick Help?</h4>
-                <p className="text-xs text-muted-foreground">
-                  Our team is available to assist you with any technical queries regarding the ERP system.
+                <h4 className="font-semibold text-sm text-[#128C7E] mb-1">Need Quick Help?</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Message us on WhatsApp for fast support on bookings, billing, or technical issues.
                 </p>
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-medium text-[#128C7E] hover:underline"
+                >
+                  Open WhatsApp
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
           </motion.div>
@@ -314,6 +347,8 @@ export default function Contact() {
           </motion.div>
         </div>
       </div>
+
+      <WhatsAppFloatingButton />
     </Layout>
   );
 }

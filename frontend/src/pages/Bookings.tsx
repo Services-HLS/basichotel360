@@ -111,6 +111,8 @@ interface Booking {
   createdAt: string;
   fromTime?: string;
   toTime?: string;
+  rawFromTime?: string;
+  rawToTime?: string;
   source?: string;
   rawFromDate?: string;
   rawToDate?: string;
@@ -253,6 +255,15 @@ const Bookings = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Booking>>({});
+  const [editAmountBaseline, setEditAmountBaseline] = useState<{
+    fromDate: string;
+    toDate: string;
+    amount: number;
+    service: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+  } | null>(null);
   const [fromDateCalendarOpen, setFromDateCalendarOpen] = useState(false);
   const [toDateCalendarOpen, setToDateCalendarOpen] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
@@ -264,6 +275,7 @@ const Bookings = () => {
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [checkoutBooking, setCheckoutBooking] = useState<Booking | null>(null);
   const [bookingModalView, setBookingModalView] = useState<'main' | 'edit'>('main');
+  const [loadingCheckoutEdit, setLoadingCheckoutEdit] = useState(false);
   const [breakfastTaken, setBreakfastTaken] = useState(false);
   const [breakfastPrice, setBreakfastPrice] = useState(150);
   const [breakfastDays, setBreakfastDays] = useState(1);
@@ -392,7 +404,7 @@ const Bookings = () => {
   const formatTime = (value: any) => {
     if (!value) return '';
     try {
-      const date = new Date(`2000-01-01T${value}`);
+      const date = new Date(`2000-01-01T${formatTimeForInput(value)}`);
       if (!isNaN(date.getTime())) {
         return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
       }
@@ -400,6 +412,25 @@ const Bookings = () => {
     } catch {
       return value;
     }
+  };
+
+  /** HH:mm for HTML time inputs (from DB TIME e.g. 14:00:00) */
+  const formatTimeForInput = (value: any): string => {
+    if (!value) return '';
+    const str = String(value).trim();
+    const match = str.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      return `${match[1].padStart(2, '0')}:${match[2]}`;
+    }
+    try {
+      const date = new Date(`2000-01-01T${str}`);
+      if (!isNaN(date.getTime())) {
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      }
+    } catch {
+      // ignore
+    }
+    return '';
   };
 
   const formatDateForInput = (value: any): string => {
@@ -473,6 +504,35 @@ const Bookings = () => {
     } catch {
       return 1;
     }
+  };
+
+  /** Scale room/service/tax amounts when stay dates change during edit */
+  const recalculateEditAmountsForDates = (
+    baseline: {
+      fromDate: string;
+      toDate: string;
+      amount: number;
+      service: number;
+      cgst: number;
+      sgst: number;
+      igst: number;
+    },
+    newFromDate: string,
+    newToDate: string
+  ) => {
+    const oldNights = Math.max(1, calculateNights(baseline.fromDate, baseline.toDate));
+    const newNights = Math.max(1, calculateNights(newFromDate, newToDate));
+    const ratio = newNights / oldNights;
+
+    const amount = Math.round(baseline.amount * ratio * 100) / 100;
+    const service = Math.round(baseline.service * ratio * 100) / 100;
+    const cgst = Math.round(baseline.cgst * ratio * 100) / 100;
+    const sgst = Math.round(baseline.sgst * ratio * 100) / 100;
+    const igst = Math.round(baseline.igst * ratio * 100) / 100;
+    const gst = Math.round((cgst + sgst + igst) * 100) / 100;
+    const total = Math.round((amount + service + gst) * 100) / 100;
+
+    return { amount, service, cgst, sgst, igst, gst, total, nights: newNights };
   };
 
   const normalizeCheckoutPaymentMethod = (method?: string): 'cash' | 'online' => {
@@ -701,8 +761,10 @@ const Bookings = () => {
           roomNumber: roomNumber,
           fromDate: formatDateForDisplay(booking?.from_date),
           toDate: formatDateForDisplay(booking?.to_date),
-          fromTime: formatTime(booking?.from_time),
-          toTime: formatTime(booking?.to_time),
+          fromTime: formatTimeForInput(booking?.from_time) || '14:00',
+          toTime: formatTimeForInput(booking?.to_time) || '12:00',
+          rawFromTime: booking?.from_time || '',
+          rawToTime: booking?.to_time || '',
           status: booking?.status || 'booked',
           payment_method: booking.payment_method || 'cash', // ← Make sure this line exists
           payment_status: booking.payment_status || 'pending',
@@ -1719,7 +1781,29 @@ const Bookings = () => {
     setIsVerifyingCheckoutPayment(false);
   };
 
-  const startEditInModal = (booking: Booking) => {
+  const mapApiBookingToEditFields = (booking: Booking, api: any): Booking => ({
+    ...booking,
+    customerName: api.customer_name || api.customer?.name || booking.customerName,
+    customerPhone: api.customer_phone || api.customer?.phone || booking.customerPhone,
+    fromDate: formatDateForDisplay(api.from_date),
+    toDate: formatDateForDisplay(api.to_date),
+    rawFromDate: api.from_date,
+    rawToDate: api.to_date,
+    fromTime: formatTimeForInput(api.from_time) || '14:00',
+    toTime: formatTimeForInput(api.to_time) || '12:00',
+    rawFromTime: api.from_time || '',
+    rawToTime: api.to_time || '',
+    amount: parseAmount(api.amount),
+    service: parseAmount(api.service),
+    gst: parseAmount(api.gst),
+    cgst: parseAmount(api.cgst),
+    sgst: parseAmount(api.sgst),
+    igst: parseAmount(api.igst),
+    total: parseAmount(api.total),
+    status: api.status || booking.status,
+  });
+
+  const startEditInModal = async (booking: Booking) => {
     if (!canEditBooking(booking.status)) {
       toast({
         title: 'Cannot edit',
@@ -1728,7 +1812,32 @@ const Bookings = () => {
       });
       return;
     }
-    handleEditStart(booking);
+
+    let bookingToEdit = booking;
+
+    if (booking.source === 'database') {
+      setLoadingCheckoutEdit(true);
+      try {
+        const res = await fetchBackendRequest(`/bookings/${booking.bookingId}`, null, 'GET');
+        if (res?.success && res.data) {
+          bookingToEdit = mapApiBookingToEditFields(booking, res.data);
+          setCheckoutBooking((prev) =>
+            prev?.bookingId === booking.bookingId ? bookingToEdit : prev
+          );
+        }
+      } catch (error) {
+        console.error('Failed to fetch booking times for edit:', error);
+        toast({
+          title: 'Could not refresh booking',
+          description: 'Showing saved data. Times may need to be re-entered.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoadingCheckoutEdit(false);
+      }
+    }
+
+    handleEditStart(bookingToEdit);
     setBookingModalView('edit');
   };
 
@@ -1877,14 +1986,7 @@ const Bookings = () => {
             <Input
               type="date"
               value={editForm.fromDate ?? ''}
-              onChange={(e) => {
-                const fromDate = e.target.value;
-                handleFieldChange('fromDate', fromDate);
-                const currentTo = editForm.toDate ?? '';
-                if (currentTo && !isCheckoutOnOrAfterCheckin(fromDate, currentTo)) {
-                  handleFieldChange('toDate', getMinCheckoutDate(fromDate));
-                }
-              }}
+              onChange={(e) => handleFieldChange('fromDate', e.target.value)}
               className="h-9"
             />
           </div>
@@ -1898,6 +2000,14 @@ const Bookings = () => {
               className="h-9"
             />
           </div>
+          {editForm.fromDate && editForm.toDate && (
+            <div className="sm:col-span-2 text-xs text-muted-foreground">
+              Stay: {calculateNights(editForm.fromDate, editForm.toDate)} night
+              {calculateNights(editForm.fromDate, editForm.toDate) !== 1 ? 's' : ''}
+              {' · '}
+              Amounts update automatically when dates change
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label className="text-xs">Check-in Time</Label>
             <Input
@@ -2832,7 +2942,18 @@ const Bookings = () => {
   // ===========================================
 
   const handleEditStart = (booking: Booking) => {
+    const fromDate = formatDateForInput(booking.rawFromDate || booking.fromDate);
+    const toDate = formatDateForInput(booking.rawToDate || booking.toDate);
     setEditingBookingId(booking.bookingId);
+    setEditAmountBaseline({
+      fromDate,
+      toDate,
+      amount: booking.amount || 0,
+      service: booking.service || 0,
+      cgst: booking.cgst || 0,
+      sgst: booking.sgst || 0,
+      igst: booking.igst || 0,
+    });
     setEditForm({
       amount: booking.amount,
       service: booking.service,
@@ -2843,10 +2964,10 @@ const Bookings = () => {
       total: booking.total,
       customerName: booking.customerName,
       customerPhone: booking.customerPhone,
-      fromDate: formatDateForInput(booking.rawFromDate || booking.fromDate),
-      toDate: formatDateForInput(booking.rawToDate || booking.toDate),
-      fromTime: booking.fromTime,
-      toTime: booking.toTime,
+      fromDate,
+      toDate,
+      fromTime: formatTimeForInput(booking.rawFromTime) || formatTimeForInput(booking.fromTime) || '14:00',
+      toTime: formatTimeForInput(booking.rawToTime) || formatTimeForInput(booking.toTime) || '12:00',
       status: booking.status
     });
   };
@@ -2854,6 +2975,7 @@ const Bookings = () => {
   const handleEditCancel = () => {
     setEditingBookingId(null);
     setEditForm({});
+    setEditAmountBaseline(null);
   };
 
   const handleEditSave = async (bookingId: string, onSuccess?: () => void) => {
@@ -2908,6 +3030,7 @@ const Bookings = () => {
     if (success) {
       setEditingBookingId(null);
       setEditForm({});
+      setEditAmountBaseline(null);
       onSuccess?.();
     }
   };
@@ -2915,6 +3038,27 @@ const Bookings = () => {
   const handleFieldChange = (field: string, value: any) => {
     setEditForm(prev => {
       const updated = { ...prev, [field]: value };
+
+      if ((field === 'fromDate' || field === 'toDate') && editAmountBaseline) {
+        const newFrom =
+          field === 'fromDate' ? String(value) : String(updated.fromDate ?? editAmountBaseline.fromDate);
+        let newTo =
+          field === 'toDate' ? String(value) : String(updated.toDate ?? editAmountBaseline.toDate);
+
+        if (field === 'fromDate' && newTo && !isCheckoutOnOrAfterCheckin(newFrom, newTo)) {
+          newTo = getMinCheckoutDate(newFrom);
+          updated.toDate = newTo;
+        }
+
+        if (newFrom && newTo && isCheckoutOnOrAfterCheckin(newFrom, newTo)) {
+          const recalculated = recalculateEditAmountsForDates(
+            editAmountBaseline,
+            newFrom,
+            newTo
+          );
+          Object.assign(updated, recalculated);
+        }
+      }
 
       if (['amount', 'service', 'cgst', 'sgst', 'igst'].includes(field)) {
         const amount = parseAmount(field === 'amount' ? value : prev.amount);
@@ -3540,7 +3684,7 @@ const Bookings = () => {
             className="w-full h-8 text-xs"
           />
         ) : (
-          params.row.fromTime
+          params.row.fromTime ? formatTime(params.row.fromTime) : '—'
         )
       ),
     },
@@ -3557,7 +3701,7 @@ const Bookings = () => {
             className="w-full h-8 text-xs"
           />
         ) : (
-          params.row.toTime
+          params.row.toTime ? formatTime(params.row.toTime) : '—'
         )
       ),
     },
@@ -3951,23 +4095,32 @@ const Bookings = () => {
     }
   ];
 
-  /** Compact list: name, action, phone, dates */
+  /** Compact list: name + room/phone/check-in, action, check-out */
   const compactBookingColumns: GridColDef<Booking>[] = [
     {
       field: 'customerName',
       headerName: 'Customer',
-      flex: 0.8,
-      minWidth: 110,
-      maxWidth: 140,
-      renderCell: (params) => (
-        <div className="flex flex-col justify-center h-full leading-tight">
+      flex: 1,
+      minWidth: 140,
+      renderCell: (params) => {
+        const overdue = isPendingCheckoutBooking(params.row);
+        return (
+        <div className="flex flex-col justify-center h-full leading-tight py-0.5">
           <span className="font-medium text-sm truncate">{params.row.customerName}</span>
-          <span className="text-[11px] text-muted-foreground">
-            Room {params.row.roomNumber}
+          <span className="text-[11px] text-muted-foreground truncate">
+            Rm {params.row.roomNumber}
             {params.row.groupBookingId && ' · Group'}
+            {overdue && ' · Overdue'}
+          </span>
+          <span className="text-[10px] text-muted-foreground truncate">
+            {params.row.customerPhone || '—'}
+          </span>
+          <span className="text-[10px] text-muted-foreground truncate">
+            In: {params.row.fromDate}
           </span>
         </div>
-      ),
+        );
+      },
     },
     {
       field: 'manage',
@@ -4003,22 +4156,6 @@ const Bookings = () => {
         </Button>
         );
       },
-    },
-    {
-      field: 'customerPhone',
-      headerName: 'Phone',
-      width: 125,
-      renderCell: (params) => (
-        <span className="text-sm">{params.row.customerPhone || '—'}</span>
-      ),
-    },
-    {
-      field: 'fromDate',
-      headerName: 'Check-in',
-      width: 115,
-      renderCell: (params) => (
-        <span className="text-sm whitespace-nowrap">{params.row.fromDate}</span>
-      ),
     },
     {
       field: 'toDate',
@@ -5184,13 +5321,11 @@ const Bookings = () => {
                         className="w-full overflow-auto rounded-md border bg-background"
                         style={{ maxHeight: isMobile ? 420 : 560 }}
                       >
-                        <table className="w-full min-w-[640px] border-collapse text-sm">
+                        <table className="w-full min-w-[420px] border-collapse text-sm">
                           <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
                             <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              <th className="p-2 w-[22%] max-w-[130px]">Customer</th>
+                              <th className="p-2 w-[38%] min-w-[140px]">Customer</th>
                               <th className="p-2 w-[20%] min-w-[96px] text-left">Action</th>
-                              <th className="p-2 w-[18%]">Phone</th>
-                              <th className="p-2 w-[18%]">Check-in</th>
                               <th className="p-2 w-[18%]">Check-out</th>
                             </tr>
                           </thead>
@@ -5203,14 +5338,25 @@ const Bookings = () => {
                                 data-booking-id={booking.bookingId}
                                 className={`border-b last:border-0 hover:bg-muted/40 transition-colors ${overdue ? 'bg-orange-50/60' : ''}`}
                               >
-                                <td className="p-2 align-middle max-w-[130px]">
-                                  <div className="font-medium text-foreground text-sm leading-tight truncate" title={booking.customerName}>
+                                <td className="p-2 align-middle min-w-[140px]">
+                                  <div
+                                    className="font-medium text-foreground text-sm leading-tight truncate"
+                                    title={booking.customerName}
+                                  >
                                     {booking.customerName}
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground truncate">
-                                    Rm {booking.roomNumber}
-                                    {booking.groupBookingId ? ' · Grp' : ''}
-                                    {overdue ? ' · Overdue' : ''}
+                                  <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                                    <div className="truncate">
+                                      Rm {booking.roomNumber}
+                                      {booking.groupBookingId ? ' · Grp' : ''}
+                                      {overdue ? ' · Overdue' : ''}
+                                    </div>
+                                    <div className="truncate">
+                                      {booking.customerPhone || '—'}
+                                    </div>
+                                    <div className="truncate">
+                                      In: {booking.fromDate}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-2 align-middle">
@@ -5238,12 +5384,6 @@ const Bookings = () => {
                                       </>
                                     )}
                                   </Button>
-                                </td>
-                                <td className="p-2 align-middle whitespace-nowrap text-muted-foreground text-xs">
-                                  {booking.customerPhone || '—'}
-                                </td>
-                                <td className="p-2 align-middle whitespace-nowrap text-xs">
-                                  {booking.fromDate}
                                 </td>
                                 <td className="p-2 align-middle whitespace-nowrap text-xs">
                                   {booking.toDate}
@@ -6622,9 +6762,10 @@ const Bookings = () => {
                     </span>
                     {getBookingStatusBadge(checkoutBooking)}
                   </div>
-                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                     {checkoutBooking.customerPhone} · Rm {checkoutBooking.roomNumber} ·{' '}
-                    {checkoutBooking.fromDate} → {checkoutBooking.toDate}
+                    {checkoutBooking.fromDate} {checkoutBooking.fromTime || '14:00'} →{' '}
+                    {checkoutBooking.toDate} {checkoutBooking.toTime || '12:00'}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={closeCheckoutModal} className="h-8 w-8 p-0 rounded-full shrink-0">
@@ -6649,7 +6790,14 @@ const Bookings = () => {
                       ← Back to actions
                     </Button>
                   </div>
-                  {renderBookingEditForm()}
+                  {loadingCheckoutEdit ? (
+                    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      Loading booking details…
+                    </div>
+                  ) : (
+                    renderBookingEditForm()
+                  )}
                   <div className="border-t p-4 bg-gray-50 flex justify-end gap-2 shrink-0">
                     <Button
                       variant="outline"

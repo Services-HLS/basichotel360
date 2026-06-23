@@ -1470,7 +1470,8 @@ export default function FunctionCheckoutModal({
         body: JSON.stringify({
           advance_paid: newTotalPaid,
           payment_status: newPaymentStatus,
-          transaction_id: finalTransactionId
+          transaction_id: finalTransactionId,
+          payment_method: paymentMethod,
         })
       });
 

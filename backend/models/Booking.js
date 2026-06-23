@@ -3,6 +3,7 @@
 
 
 const { pool } = require('../config/database');
+const { serializeGuestsForDb } = require('../utils/guestUtils');
 const bookingQueries = require('../queries/bookingQueries');
 
 class Booking {
@@ -240,7 +241,7 @@ class Booking {
           parseFloat(total),
           advancePaid,
           remainingAmount,
-          parseInt(bookingData.guests || 1),
+          serializeGuestsForDb(bookingData),
           bookingData.special_requests || '',
           bookingData.id_type || 'aadhaar',
           bookingData.payment_method || 'cash',
@@ -294,7 +295,7 @@ class Booking {
         parseFloat(bookingData.service || 0),
         parseFloat(bookingData.gst || 0),
         parseFloat(total),
-        parseInt(bookingData.guests || 1),
+        serializeGuestsForDb(bookingData),
         bookingData.special_requests || '',
         bookingData.referral_by || '',
         parseFloat(bookingData.referral_amount || 0)
@@ -864,7 +865,7 @@ class Booking {
           parseFloat(bookingData.sgst || 0),
           parseFloat(bookingData.igst || 0),
           parseFloat(bookingData.total || 0),
-          parseInt(bookingData.guests || 1),
+          serializeGuestsForDb(bookingData),
           bookingData.special_requests || '',
           bookingData.payment_method || 'cash',
           bookingData.payment_status || 'pending',

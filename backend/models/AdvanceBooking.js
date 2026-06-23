@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { serializeGuestsForDb } = require('../utils/guestUtils');
 
 class AdvanceBooking {
     // Create a new advance booking
@@ -120,6 +121,7 @@ class AdvanceBooking {
     const advance_expiry_date = new Date();
     advance_expiry_date.setDate(advance_expiry_date.getDate() + expiry_days);
     const invoice_number = await this.getNextInvoiceNumber(hotel_id);
+    const guestsStored = serializeGuestsForDb(data);
 
     const [result] = await pool.execute(
         `INSERT INTO advance_bookings (
@@ -133,7 +135,7 @@ class AdvanceBooking {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             hotel_id, customer_id, room_id, group_booking_id, from_date, to_date, from_time, to_time,
-            guests, amount, advance_amount, remaining_amount, service, cgst, sgst, igst, total,
+            guestsStored, amount, advance_amount, remaining_amount, service, cgst, sgst, igst, total,
             payment_method, payment_status, transaction_id, invoice_number, status,
             advance_expiry_date, expiry_days, special_requests, id_type, id_number,
             id_image, id_image2, referral_by, referral_amount, address, city, state,

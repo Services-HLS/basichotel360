@@ -10,6 +10,7 @@ const InvoiceService = require('../services/Adv-invoiceService');
 const EmailService = require('../services/emailService'); // 👈 ADD THIS
 const WhatsAppService = require('../services/whatsappService'); // 👈 ADD THIS
 const { isBasicHotelPlan } = require('../utils/planUtils');
+const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
 
 // Import fs and path for logo handling
 const fs = require('fs'); // 👈 ADD THIS
@@ -324,6 +325,8 @@ const advanceBookingController = {
                 to_date,
                 from_time = '14:00',
                 to_time = '12:00',
+                adults,
+                children,
                 guests = 1,
                 amount = 0,
                 advance_amount = 0,
@@ -466,6 +469,8 @@ const advanceBookingController = {
                 to_date,
                 from_time,
                 to_time,
+                adults,
+                children,
                 guests,
                 amount: parseFloat(amount),
                 advance_amount: parseFloat(advance_amount),

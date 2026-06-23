@@ -16,6 +16,8 @@ const WhatsAppService = require('../services/whatsappService');
 const EmailService = require('../services/emailService');
 const SchedulerService = require('../services/schedulerService');
 const { isBasicHotelPlan } = require('../utils/planUtils');
+const { getPaymentBreakdown } = require('../utils/paymentBreakdown');
+const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
 
 const fs = require('fs');
 const path = require('path');
@@ -292,11 +294,16 @@ const bookingController = {
         total: finalTotal,
         invoice_number: invoiceNumber,
         status: status || 'booked',
-        guests: parseInt(guests || 1),
+        guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
         special_requests: special_requests || '',
         id_type: id_type || 'aadhaar',
         payment_method: payment_method || 'cash',
-        payment_status: payment_method === 'cash' ? 'completed' : (payment_status || 'pending'),
+        payment_status:
+          payment_status !== undefined && payment_status !== null && payment_status !== ''
+            ? payment_status
+            : payment_method === 'cash'
+              ? 'completed'
+              : 'pending',
         transaction_id: transaction_id || null,
         referral_by: referral_by || '',
         referral_amount: parseFloat(referral_amount || 0),
@@ -1489,9 +1496,9 @@ const bookingController = {
       const discountAmount = parseFloat(booking.discount_amount) || 0;
       const originalAmount = parseFloat(booking.original_amount) || amount;
 
-      // Get advance payment details
-      const advancePaid = parseFloat(booking.advance_amount_paid) || 0;
-      const remainingAmount = parseFloat(booking.remaining_amount) || (safeValue(booking.total) - advancePaid);
+      // Payment breakdown: advance at booking vs paid at checkout
+      const paymentBreakdown = getPaymentBreakdown(booking);
+      const { bookingAdvance, checkoutPaid, totalPaid, remainingAmount } = paymentBreakdown;
 
       let taxType = 'cgst_sgst';
       let cgstPercentage = 0, sgstPercentage = 0, igstPercentage = 0;
@@ -1562,15 +1569,6 @@ const bookingController = {
         });
       }
 
-      // Add advance payment as a charge (negative amount like discount)
-      if (advancePaid > 0) {
-        charges.push({
-          description: 'Advance Payment Already Paid',
-          amount: -advancePaid,
-          isAdvance: true
-        });
-      }
-
       if (otherExpenses > 0) {
         charges.push({
           description: `Other Expenses${expenseDescription ? ` (${expenseDescription})` : ''}`,
@@ -1578,10 +1576,30 @@ const bookingController = {
         });
       }
 
-      // Add remaining balance as a separate line
+      // Payment lines on invoice
+      if (bookingAdvance > 0) {
+        charges.push({
+          description:
+            booking.status === 'completed'
+              ? 'Advance Paid at Booking'
+              : 'Advance Payment Already Paid',
+          amount: -bookingAdvance,
+          isAdvance: true
+        });
+      }
+
+      if (checkoutPaid > 0) {
+        charges.push({
+          description: 'Paid at Checkout',
+          amount: -checkoutPaid,
+          isCheckoutPayment: true
+        });
+      }
+
       if (remainingAmount > 0) {
         charges.push({
-          description: 'Balance Due at Check-in',
+          description:
+            booking.status === 'completed' ? 'Balance Due' : 'Balance Due at Check-in',
           amount: remainingAmount,
           isBalance: true,
           bold: true,
@@ -1597,8 +1615,10 @@ const bookingController = {
         discountPercentage: discountPercentage,
         discountAmount: discountAmount,
         originalAmount: originalAmount,
-        advancePaid: advancePaid,        // ← NEW: Add advance paid amount
-        remainingAmount: remainingAmount, // ← NEW: Add remaining amount
+        advancePaid: bookingAdvance,
+        checkoutPaid,
+        totalPaid,
+        remainingAmount: remainingAmount,
         hotel: {
           name: hotelDetails.name || 'Hotel',
           address: hotelDetails.address || '',
@@ -1650,7 +1670,9 @@ const bookingController = {
               ? 'completed'
               : (booking.payment_status || 'pending'),
           transactionId: booking.transaction_id || '',
-          advancePaid: advancePaid,
+          advancePaid: bookingAdvance,
+          checkoutPaid,
+          totalPaid,
           remainingAmount: remainingAmount
         },
         footer: {
@@ -1662,8 +1684,10 @@ const bookingController = {
         }
       };
 
-      console.log('✅ Invoice data generated with advance payment:', {
-        advancePaid,
+      console.log('✅ Invoice data generated with payment breakdown:', {
+        bookingAdvance,
+        checkoutPaid,
+        totalPaid,
         remainingAmount,
         total: invoiceData.total
       });
@@ -2302,7 +2326,7 @@ const bookingController = {
   //       <div class="cell-label">Stay Period</div>
   //       <div class="cell-value">
   //         <strong>${formatDateDisplay(booking.from_date)} — ${formatDateDisplay(booking.to_date)}</strong>
-  //         ${nights} Nights · ${booking.guests || 1} Adults
+  //         ${nights} Nights · ${formatGuestsForDisplay(booking.guests)}
   //         <br>🏨 ${escapeHtml(roomDetails?.type || 'Standard')} Room
   //       </div>
   //     </div>
@@ -2527,9 +2551,9 @@ const bookingController = {
       const totalAmount = parseFloat(booking.total) || 0;
       const perNightRate = nights > 0 ? roomAmount / nights : roomAmount;
 
-      // Get advance payment amount
-      const advancePaid = parseFloat(booking.advance_amount_paid) || 0;
-      const remainingAmount = parseFloat(booking.remaining_amount) || (totalAmount - advancePaid);
+      // Payment breakdown for invoice
+      const paymentBreakdown = getPaymentBreakdown(booking);
+      const { bookingAdvance, checkoutPaid, totalPaid, remainingAmount } = paymentBreakdown;
 
       // Get discount values
       const discountPercentage = parseFloat(booking.discount_percentage) || 0;
@@ -2676,7 +2700,7 @@ const bookingController = {
       <div class="cell-label">Stay Period</div>
       <div class="cell-value">
         <strong>${formatDateDisplay(booking.from_date)} — ${formatDateDisplay(booking.to_date)}</strong>
-        ${nights} Nights · ${booking.guests || 1} Adults
+        ${nights} Nights · ${formatGuestsForDisplay(booking.guests)}
         <br>🏨 ${escapeHtml(roomDetails?.type || 'Standard')} Room
       </div>
     </div>
@@ -2733,15 +2757,21 @@ const bookingController = {
     ${taxType === 'cgst_sgst' && cgstAmount > 0 ? `<div class="calc-row gst"><span>CGST @ ${cgstPercentage.toFixed(2)}%</span><span>₹${formatCurrency(cgstAmount)}</span></div>` : ''}
     ${taxType === 'cgst_sgst' && sgstAmount > 0 ? `<div class="calc-row gst"><span>SGST @ ${sgstPercentage.toFixed(2)}%</span><span>₹${formatCurrency(sgstAmount)}</span></div>` : ''}
     ${taxType === 'igst' && igstAmount > 0 ? `<div class="calc-row gst"><span>IGST @ ${igstPercentage.toFixed(2)}%</span><span>₹${formatCurrency(igstAmount)}</span></div>` : ''}
-    ${advancePaid > 0 ? `
+    ${bookingAdvance > 0 ? `
       <div class="calc-row advance">
-        <span>Advance Payment</span>
-        <span>- ₹${formatCurrency(advancePaid)}</span>
+        <span>Advance Paid at Booking</span>
+        <span>- ₹${formatCurrency(bookingAdvance)}</span>
+      </div>
+    ` : ''}
+    ${checkoutPaid > 0 ? `
+      <div class="calc-row advance">
+        <span>Paid at Checkout</span>
+        <span>- ₹${formatCurrency(checkoutPaid)}</span>
       </div>
     ` : ''}
     <div class="calc-row" style="border-top: 2px solid #D9C890; margin-top: 8px; padding-top: 8px; font-weight: bold;">
-      <span>TOTAL AMOUNT DUE</span>
-      <span>₹${formatCurrency(remainingAmount > 0 ? remainingAmount : totalAmount)}</span>
+      <span>${remainingAmount > 0 ? 'BALANCE DUE' : 'TOTAL PAID'}</span>
+      <span>₹${formatCurrency(remainingAmount > 0 ? remainingAmount : totalPaid)}</span>
     </div>
   </div>
   
@@ -2750,7 +2780,8 @@ const bookingController = {
     <div>
       <div class="total-label">Total Amount</div>
       <div style="font-size:10px;opacity:.6;margin-top:2px;">INR · Inclusive of all taxes</div>
-      ${advancePaid > 0 ? `<div style="font-size:9px;color:#A08030;margin-top:4px;">Advance Paid: ₹${formatCurrency(advancePaid)}</div>` : ''}
+      ${bookingAdvance > 0 ? `<div style="font-size:9px;color:#A08030;margin-top:4px;">Advance at Booking: ₹${formatCurrency(bookingAdvance)}</div>` : ''}
+      ${checkoutPaid > 0 ? `<div style="font-size:9px;color:#A08030;margin-top:2px;">Paid at Checkout: ₹${formatCurrency(checkoutPaid)}</div>` : ''}
       ${discountPercentage > 0 ? `<div style="font-size:9px;color:#1A5A20;margin-top:2px;">You saved ₹${formatCurrency(discountAmount)} with ${discountPercentage}% discount!</div>` : ''}
     </div>
     <div class="total-amount">₹${formatCurrency(totalAmount)}</div>
@@ -3277,7 +3308,7 @@ const bookingController = {
         total: finalTotal,
         invoice_number: finalInvoiceNumber,
         status: status,
-        guests: parseInt(guests || 1),
+        guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
         special_requests: special_requests || '',
         id_type: id_type || 'aadhaar',
         payment_method: payment_method || 'cash',
@@ -4370,7 +4401,7 @@ const bookingController = {
   //           igst: parseFloat(igst || 0),
   //           total: parseFloat(total || amount || 0),
   //           status: 'booked',
-  //           guests: parseInt(guests || 1),
+  //           guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
   //           special_requests: special_requests || '',
   //           payment_method: payment_method || 'cash',
   //           payment_status: payment_status || 'pending',
@@ -4590,7 +4621,7 @@ const bookingController = {
               igst: parseFloat(bookingData.igst || 0),
               total: parseFloat(bookingData.total || 0),
               status: 'booked',
-              guests: parseInt(bookingData.guests || 1),
+              guests: serializeGuestsForDb(bookingData),
               special_requests: bookingData.special_requests || '',
               payment_method: bookingData.conversion_payment_method || bookingData.payment_method || 'cash',
               payment_status: bookingData.conversion_payment_status || bookingData.payment_status || 'completed',
@@ -5205,7 +5236,7 @@ const bookingController = {
       const guestDetails = guestDetailsHtml;
 
       const stayDates = `${formatDateDisplay(booking.from_date)} — ${formatDateDisplay(booking.to_date)}`;
-      const stayDetails = `${nights} Nights · ${booking.guests || 1} Adults<br>${roomDetails?.type || 'Standard'} Room`;
+      const stayDetails = `${nights} Nights · ${formatGuestsForDisplay(booking.guests)}<br>${roomDetails?.type || 'Standard'} Room`;
       const resId = `RES-${booking.id}`;
       const resDetails = escapeHtml(booking.special_requests ? 'Special Request: ' + booking.special_requests.substring(0, 50) : 'Direct Booking');
       const roomType = escapeHtml(roomDetails?.type || 'Deluxe King Room');

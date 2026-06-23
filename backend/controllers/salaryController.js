@@ -294,12 +294,14 @@ const salaryController = {
         });
       }
 
-      // Calculate net salary if not provided
-      const calculatedNetSalary = (parseFloat(basic_salary || 0) + 
-                                   parseFloat(allowances || 0) - 
-                                   parseFloat(deductions || 0)).toFixed(2);
-
-      const finalNetSalary = net_salary || calculatedNetSalary;
+      // Always calculate net salary server-side (Basic + Allowances - Deductions)
+      const finalNetSalary = parseFloat(
+        (
+          parseFloat(basic_salary || 0) +
+          parseFloat(allowances || 0) -
+          parseFloat(deductions || 0)
+        ).toFixed(2)
+      );
 
       const salaryId = await Salary.create({
         hotel_id: hotelId,
@@ -429,12 +431,13 @@ const salaryController = {
         remarks
       } = req.body;
 
-      // Calculate net salary
-      const calculatedNetSalary = (parseFloat(basic_salary || 0) + 
-                                   parseFloat(allowances || 0) - 
-                                   parseFloat(deductions || 0)).toFixed(2);
-
-      const finalNetSalary = net_salary || calculatedNetSalary;
+      const finalNetSalary = parseFloat(
+        (
+          parseFloat(basic_salary || 0) +
+          parseFloat(allowances || 0) -
+          parseFloat(deductions || 0)
+        ).toFixed(2)
+      );
 
       const updated = await Salary.update(id, hotelId, {
         basic_salary: parseFloat(basic_salary || 0),

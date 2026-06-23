@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { formatGuestsForDisplay } from '@/lib/guestUtils';
 
 interface InvoiceModalProps {
   bookingId: string;
@@ -1144,7 +1145,7 @@ const InvoiceModal = ({
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Guests:</span>
                         <span className="font-medium flex items-center gap-1">
-                          <Users className="w-4 h-4" /> {databaseInvoice.booking.guests}
+                          <Users className="w-4 h-4" /> {formatGuestsForDisplay(databaseInvoice.booking.guests)}
                         </span>
                       </div>
                     )}
@@ -1279,6 +1280,32 @@ const InvoiceModal = ({
                         <div className="font-medium font-mono text-sm">
                           {databaseInvoice.payment.transactionId}
                         </div>
+                      </div>
+                    )}
+                    {(databaseInvoice.bookingAdvance > 0 || databaseInvoice.checkoutPaid > 0) && (
+                      <div className="col-span-2 border-t pt-3 mt-1 space-y-2">
+                        {databaseInvoice.bookingAdvance > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Advance at Booking</span>
+                            <span className="font-medium text-green-700">
+                              ₹{Number(databaseInvoice.bookingAdvance).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        )}
+                        {databaseInvoice.checkoutPaid > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Paid at Checkout</span>
+                            <span className="font-medium text-green-700">
+                              ₹{Number(databaseInvoice.checkoutPaid).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        )}
+                        {databaseInvoice.totalPaid > 0 && (
+                          <div className="flex justify-between text-sm font-semibold">
+                            <span>Total Paid</span>
+                            <span>₹{Number(databaseInvoice.totalPaid).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -152,7 +152,12 @@ interface DateRange {
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
 // Validation function
-const validateStep = (step: number, bookingForm: any, toast: any): boolean => {
+const validateStep = (
+  step: number,
+  bookingForm: any,
+  toast: any,
+  paymentMethod?: 'online' | 'cash' | null
+): boolean => {
   switch (step) {
     case 1:
       if (!bookingForm.event_name) {
@@ -191,6 +196,16 @@ const validateStep = (step: number, bookingForm: any, toast: any): boolean => {
       }
       if (!bookingForm.customer_phone || bookingForm.customer_phone.length < 10) {
         toast({ title: 'Valid phone number required', variant: 'destructive' });
+        return false;
+      }
+      return true;
+    case 3:
+      if (!paymentMethod) {
+        toast({
+          title: 'Payment method required',
+          description: 'Please select Cash or Online payment',
+          variant: 'destructive',
+        });
         return false;
       }
       return true;
@@ -630,13 +645,13 @@ export default function FunctionRooms() {
         const upiId = 'hotel@upi';
         const merchantName = 'Hotel Management';
 
-        const upiString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&am=${calculateGrandTotal()}&cu=INR&tn=${encodeURIComponent(newTransactionId)}`;
+        const upiString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&am=${getCollectibleAmount()}&cu=INR&tn=${encodeURIComponent(newTransactionId)}`;
         setQrCodeData(upiString);
       }
 
       localStorage.setItem('currentTransaction', JSON.stringify({
         id: newTransactionId,
-        amount: calculateGrandTotal(),
+        amount: getCollectibleAmount(),
         roomId: selectedRoom?.id,
         timestamp: Date.now()
       }));
@@ -1023,6 +1038,13 @@ export default function FunctionRooms() {
       }));
     }
   }, [paymentMethod]);
+
+  // Basic plan: default to cash on payment step
+  useEffect(() => {
+    if (activeStep === 3 && !paymentMethod && !isProUser) {
+      setPaymentMethod('cash');
+    }
+  }, [activeStep, isProUser, paymentMethod]);
 
   // Debug: Log standardRooms changes
   useEffect(() => {
@@ -1522,6 +1544,21 @@ export default function FunctionRooms() {
     return calculateFunctionTotal();
   };
 
+  const getCollectibleAmount = (): number => {
+    const advance = Number(bookingForm.advance_paid) || 0;
+    const grandTotal = calculateGrandTotal();
+    if (advance > 0) {
+      return Math.min(advance, grandTotal);
+    }
+    return grandTotal;
+  };
+
+  const getBalanceDue = (): number =>
+    Math.max(0, calculateGrandTotal() - getCollectibleAmount());
+
+  const getResolvedPaymentMethod = (): 'cash' | 'online' =>
+    (paymentMethod || bookingForm.payment_method || 'cash') as 'cash' | 'online';
+
   // const handleCloseBookingModal = () => {
   //   setShowBookingModal(false);
   //   setSelectedRoom(null);
@@ -1989,6 +2026,35 @@ export default function FunctionRooms() {
       return;
     }
 
+    const resolvedPaymentMethod = getResolvedPaymentMethod();
+    if (!paymentMethod) {
+      toast({
+        title: 'Payment method required',
+        description: 'Please select Cash or Online on the payment step',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (paymentMethod === 'online' && paymentStatus !== 'completed') {
+      toast({
+        title: 'Complete payment first',
+        description: 'Verify online payment before confirming the booking',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const advancePaidAtBooking = Number(bookingForm.advance_paid) || 0;
+    if (advancePaidAtBooking > calculateGrandTotal()) {
+      toast({
+        title: 'Invalid advance amount',
+        description: 'Advance cannot be greater than the grand total',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Final availability check
     const isAvailable = await checkRoomAvailability(selectedRoom.id);
 
@@ -2101,13 +2167,12 @@ export default function FunctionRooms() {
       const advancePaid = Number(bookingForm.advance_paid) || 0;
       const grandTotal = calculateGrandTotal();
 
-      let paymentStatus = 'pending';
+      let paymentStatusValue = 'pending';
       if (advancePaid >= grandTotal) {
-        paymentStatus = 'completed';
+        paymentStatusValue = 'completed';
       } else if (advancePaid > 0) {
-        paymentStatus = 'pending';
+        paymentStatusValue = 'pending';
       }
-      // ====== END OF PAYMENT STATUS CODE ======
 
       // Create function booking data
       const functionBookingData = {
@@ -2129,13 +2194,12 @@ export default function FunctionRooms() {
         other_charges: customOtherCharges,
         other_charges_description: otherChargesDescription || null,
         total_amount: calculateFunctionTotal(),
-        advance_paid: Number(bookingForm.advance_paid) || 0,
+        advance_paid: advancePaid,
         guests_expected: Number(bookingForm.guests_expected) || 1,
 
-        // FIXED: Use the selected payment method from state, not bookingForm
-        payment_method: paymentMethod || 'cash',  // This is the key fix!
+        payment_method: resolvedPaymentMethod,
 
-        payment_status: paymentStatus,
+        payment_status: paymentStatusValue,
         status: 'confirmed',
 
         customer_name: bookingForm.customer_name,
@@ -2158,19 +2222,21 @@ export default function FunctionRooms() {
         total_room_gst: 0,
 
         // Add transaction ID if available
-        transaction_id: paymentMethod === 'online' && transactionId ? transactionId : null,
+        transaction_id: resolvedPaymentMethod === 'online' && transactionId ? transactionId : null,
 
         special_requests: bookingForm.special_requests || null,
         catering_requirements: bookingForm.catering_requirements || null
       };
 
-      console.log('📤 Creating function booking with payment method:', paymentMethod, functionBookingData);
+      console.log('📤 Creating function booking with payment method:', resolvedPaymentMethod, functionBookingData);
       const result = await createFunctionBooking(functionBookingData);
 
       if (result && result.success) {
         toast({
           title: '✅ Booking Created Successfully',
-          description: `Booking reference: ${result.data.booking_reference}`,
+          description: advancePaid > 0
+            ? `Booking ${result.data.booking_reference} created. ₹${advancePaid.toLocaleString('en-IN')} advance recorded (${resolvedPaymentMethod}).`
+            : `Booking reference: ${result.data.booking_reference}`,
         });
 
         handleCloseBookingModal();
@@ -4417,6 +4483,42 @@ export default function FunctionRooms() {
                     </Badge>
                   </div>
 
+                  {Number(bookingForm.advance_paid) > 0 && (
+                    <Alert className="bg-emerald-50 border-emerald-200">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      <AlertDescription className="text-sm">
+                        Collecting advance of{' '}
+                        <strong>{formatCurrency(getCollectibleAmount())}</strong> via{' '}
+                        {paymentMethod ? (paymentMethod === 'cash' ? 'Cash' : 'Online') : 'selected method'}.
+                        Balance due: <strong>{formatCurrency(getBalanceDue())}</strong> at checkout/event.
+                        This advance will appear in <strong>Collections</strong> after booking.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Total amount</span>
+                      <span className="font-semibold">{formatCurrency(calculateGrandTotal())}</span>
+                    </div>
+                    {Number(bookingForm.advance_paid) > 0 && (
+                      <>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Advance (pay now)</span>
+                          <span className="font-semibold text-emerald-700">
+                            {formatCurrency(getCollectibleAmount())}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t pt-2">
+                          <span className="font-medium">Balance due</span>
+                          <span className="text-lg font-bold text-orange-700">
+                            {formatCurrency(getBalanceDue())}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   {isProUser ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Button
@@ -4502,25 +4604,41 @@ export default function FunctionRooms() {
                                       e.currentTarget.src = 'https://via.placeholder.com/200x200?text=QR+Code';
                                     }}
                                   />
-                                  <div className="mt-3 text-center">
-                                    <div className="text-sm font-medium mb-1">
-                                      Amount: <span className="text-lg font-bold text-green-600">₹{calculateGrandTotal().toFixed(2)}</span>
+                                  <div className="mt-3 text-center space-y-1">
+                                    <div className="text-sm font-medium">
+                                      {Number(bookingForm.advance_paid) > 0 ? 'Advance' : 'Amount'}:{' '}
+                                      <span className="text-lg font-bold text-green-600">
+                                        ₹{getCollectibleAmount().toFixed(2)}
+                                      </span>
                                     </div>
+                                    {Number(bookingForm.advance_paid) > 0 && getBalanceDue() > 0 && (
+                                      <div className="text-xs text-orange-700 font-medium">
+                                        Balance due later: ₹{getBalanceDue().toFixed(2)}
+                                      </div>
+                                    )}
                                   </div>
                                 </>
                               ) : (
                                 <>
                                   <QRCode
-                                    value={`upi://pay?pa=hotel@upi&pn=Hotel&am=${calculateGrandTotal()}&cu=INR`}
+                                    value={`upi://pay?pa=hotel@upi&pn=Hotel&am=${getCollectibleAmount()}&cu=INR`}
                                     size={200}
                                     level="H"
                                     includeMargin={true}
                                     className="mx-auto"
                                   />
-                                  <div className="mt-3 text-center">
-                                    <div className="text-sm font-medium mb-1">
-                                      Amount: <span className="text-lg font-bold text-green-600">₹{calculateGrandTotal().toFixed(2)}</span>
+                                  <div className="mt-3 text-center space-y-1">
+                                    <div className="text-sm font-medium">
+                                      {Number(bookingForm.advance_paid) > 0 ? 'Advance' : 'Amount'}:{' '}
+                                      <span className="text-lg font-bold text-green-600">
+                                        ₹{getCollectibleAmount().toFixed(2)}
+                                      </span>
                                     </div>
+                                    {Number(bookingForm.advance_paid) > 0 && getBalanceDue() > 0 && (
+                                      <div className="text-xs text-orange-700 font-medium">
+                                        Balance due later: ₹{getBalanceDue().toFixed(2)}
+                                      </div>
+                                    )}
                                     <div className="text-xs text-gray-500 mt-2">
                                       UPI ID: hotel@upi
                                     </div>
@@ -4543,7 +4661,14 @@ export default function FunctionRooms() {
                                 <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                                   <span className="text-xs font-medium text-primary">2</span>
                                 </div>
-                                <p className="text-sm">Enter amount: <strong>₹{calculateGrandTotal().toFixed(2)}</strong></p>
+                                <p className="text-sm">
+                                  Enter amount: <strong>₹{getCollectibleAmount().toFixed(2)}</strong>
+                                  {Number(bookingForm.advance_paid) > 0 && getBalanceDue() > 0 && (
+                                    <span className="text-muted-foreground">
+                                      {' '}(balance ₹{getBalanceDue().toFixed(2)} due later)
+                                    </span>
+                                  )}
+                                </p>
                               </div>
                               <div className="flex items-start gap-3">
                                 <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
@@ -4612,13 +4737,29 @@ export default function FunctionRooms() {
                         </div>
                       </div>
 
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="font-medium">Total Amount Due:</span>
-                          <span className="text-2xl font-bold text-blue-700">
+                          <span className="font-medium">Grand Total:</span>
+                          <span className="text-lg font-bold text-blue-700">
                             ₹{calculateGrandTotal().toFixed(2)}
                           </span>
                         </div>
+                        {Number(bookingForm.advance_paid) > 0 && (
+                          <>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">Collect now (advance):</span>
+                              <span className="font-semibold text-emerald-700">
+                                ₹{getCollectibleAmount().toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-t border-blue-200 pt-2">
+                              <span className="font-medium">Balance due:</span>
+                              <span className="font-bold text-orange-700">
+                                ₹{getBalanceDue().toFixed(2)}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <div className="space-y-3">

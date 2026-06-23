@@ -781,14 +781,17 @@ class FunctionRoomController {
       }
 
       // Determine payment status based on advance payment
-      // If advance_paid equals total_amount, it's completed
-      // Otherwise it's pending or partial
       let finalPaymentStatus = payment_status;
       if (advance_paid >= total_amount) {
         finalPaymentStatus = 'completed';
       } else if (advance_paid > 0) {
-        finalPaymentStatus = 'pending'; // or 'partial' if you have that status
+        finalPaymentStatus = 'pending';
       }
+
+      const normalizedPaymentMethod =
+        ['online', 'upi', 'card'].includes(String(payment_method || '').toLowerCase())
+          ? 'online'
+          : 'cash';
 
       // Start a transaction to ensure both inserts succeed
       const connection = await pool.getConnection();
@@ -837,7 +840,7 @@ class FunctionRoomController {
           advance_paid,
           guests_expected || null,
           null, // guests_attended
-          payment_method || 'cash',
+          normalizedPaymentMethod,
           finalPaymentStatus, // Use the determined payment status
           transaction_id || null,
           status,
@@ -860,36 +863,39 @@ class FunctionRoomController {
 
         const [result] = await connection.execute(sql, values);
 
-        // Insert into function_booking_amounts table
-        // Determine transaction type based on payment
-        let transactionType = 'payment';
-        let transactionAmount = total_amount;
+        // Record advance/full payment in function_booking_amounts (shows in Collections)
+        let amountResult = null;
+        const paidAdvance = Number(advance_paid) || 0;
+        if (paidAdvance > 0) {
+          const transactionType =
+            paidAdvance >= Number(total_amount) ? 'payment' : 'advance';
+          const transactionAmount = paidAdvance;
 
-        // If advance paid is less than total, record the advance payment
-        if (advance_paid > 0 && advance_paid < total_amount) {
-          transactionType = 'advance';
-          transactionAmount = advance_paid;
-        }
-
-        // Insert into amount tracking table
-        const [amountResult] = await connection.execute(
+          [amountResult] = await connection.execute(
           `INSERT INTO function_booking_amounts (
           function_booking_id, hotel_id, transaction_type, payment_method,
           transaction_amount, transaction_reference, description, created_by
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            result.insertId,
-            hotelId,
-            transactionType,
-            payment_method || 'cash',
-            transactionAmount,
-            transaction_id || null,
-            transactionType === 'advance' ? 'Advance payment received' : 'Full payment received',
-            userId
-          ]
-        );
+            [
+              result.insertId,
+              hotelId,
+              transactionType,
+              normalizedPaymentMethod,
+              transactionAmount,
+              transaction_id || null,
+              transactionType === 'advance'
+                ? `Advance payment received (${normalizedPaymentMethod})`
+                : `Full payment received (${normalizedPaymentMethod})`,
+              userId
+            ]
+          );
 
-        console.log(`💰 Transaction recorded: ${transactionType} of ₹${transactionAmount}`);
+          console.log(
+            `💰 Transaction recorded: ${transactionType} of ₹${transactionAmount} via ${normalizedPaymentMethod}`
+          );
+        } else {
+          console.log('ℹ️ No advance paid at booking — skipping collections entry');
+        }
 
         // Create junction entries if room bookings exist
         if (has_room_bookings && roomBookingIdsArray && roomBookingIdsArray.length > 0) {
@@ -932,12 +938,14 @@ class FunctionRoomController {
             payment_status: finalPaymentStatus,
             has_room_bookings,
             total_rooms_booked,
-            transaction: {
-              id: amountResult.insertId,
-              type: transactionType,
-              amount: transactionAmount,
-              method: payment_method
-            }
+            transaction: amountResult
+              ? {
+                  id: amountResult.insertId,
+                  type: paidAdvance >= Number(total_amount) ? 'payment' : 'advance',
+                  amount: paidAdvance,
+                  method: normalizedPaymentMethod,
+                }
+              : null,
           }
         });
 
@@ -1489,7 +1497,7 @@ class FunctionRoomController {
       const { id } = req.params;
       const hotelId = req.user.hotel_id;
       const userId = req.user.userId;
-      const { payment_status, transaction_id, advance_paid } = req.body;
+      const { payment_status, transaction_id, advance_paid, payment_method } = req.body;
 
       // Get current booking to know the total amount
       const [bookings] = await pool.execute(
@@ -1508,6 +1516,10 @@ class FunctionRoomController {
       const booking = bookings[0];
       const currentAdvance = Number(booking.advance_paid) || 0;
       const totalAmount = Number(booking.total_amount) || 0;
+      const normalizedPaymentMethod =
+        ['online', 'upi', 'card'].includes(String(payment_method || booking.payment_method || '').toLowerCase())
+          ? 'online'
+          : 'cash';
 
       // Calculate new advance and determine transaction type
       let newAdvance = currentAdvance;
@@ -1551,6 +1563,11 @@ class FunctionRoomController {
           values.push(newAdvance);
         }
 
+        if (payment_method) {
+          updates.push('payment_method = ?');
+          values.push(normalizedPaymentMethod);
+        }
+
         if (updates.length === 0) {
           return res.status(400).json({
             success: false,
@@ -1585,7 +1602,7 @@ class FunctionRoomController {
               id,
               hotelId,
               transactionType,
-              booking.payment_method || 'cash',
+              normalizedPaymentMethod,
               transactionAmount,
               transaction_id || null,
               transactionType === 'advance'

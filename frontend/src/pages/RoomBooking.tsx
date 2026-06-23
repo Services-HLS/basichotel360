@@ -3633,32 +3633,48 @@ const RoomBooking = () => {
             ) : bookings.length > 0 ? (
               <div className="space-y-4">
                 <div className="overflow-auto rounded-md border bg-background">
-                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <table className="w-full min-w-[420px] border-collapse text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
                       <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        <th className="p-2 w-[24%] max-w-[140px]">Customer</th>
+                        <th className="p-2 w-[38%] min-w-[140px]">Customer</th>
                         <th className="p-2 w-[18%] min-w-[100px]">Action</th>
-                        <th className="p-2 w-[18%]">Phone</th>
-                        <th className="p-2 w-[18%]">Check-in</th>
                         <th className="p-2 w-[18%]">Check-out</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedBookings.map((booking) => (
+                      {paginatedBookings.map((booking) => {
+                        const overdue = isPendingCheckoutBooking(toBookingLike(booking));
+                        const checkInLabel = booking.checkIn
+                          ? new Date(booking.checkIn).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—';
+                        return (
                         <tr
                           key={booking.id}
-                          className="border-b last:border-0 hover:bg-muted/40 transition-colors"
+                          className={`border-b last:border-0 hover:bg-muted/40 transition-colors ${overdue ? 'bg-orange-50/60' : ''}`}
                         >
-                          <td className="p-2 align-middle max-w-[140px]">
+                          <td className="p-2 align-middle min-w-[140px]">
                             <div
                               className="font-medium text-sm truncate"
                               title={booking.customerName}
                             >
                               {booking.customerName}
                             </div>
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              Rm {booking.roomNumber}
-                              {booking.groupBookingId ? ' · Grp' : ''}
+                            <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                              <div className="truncate">
+                                Rm {booking.roomNumber}
+                                {booking.groupBookingId ? ' · Grp' : ''}
+                                {overdue ? ' · Overdue' : ''}
+                              </div>
+                              <div className="truncate">
+                                {booking.customerPhone || '—'}
+                              </div>
+                              <div className="truncate">
+                                In: {checkInLabel}
+                              </div>
                             </div>
                           </td>
                           <td className="p-2 align-middle">
@@ -3685,21 +3701,14 @@ const RoomBooking = () => {
                               )}
                             </div>
                           </td>
-                          <td className="p-2 align-middle whitespace-nowrap text-xs text-muted-foreground">
-                            {booking.customerPhone || '—'}
-                          </td>
-                          <td className="p-2 align-middle whitespace-nowrap text-xs">
-                            {booking.checkIn
-                              ? new Date(booking.checkIn).toLocaleDateString('en-GB')
-                              : '—'}
-                          </td>
                           <td className="p-2 align-middle whitespace-nowrap text-xs">
                             {booking.checkOut
                               ? formatBookingDateTime(booking.checkOut, booking.checkOutTime)
                               : '—'}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

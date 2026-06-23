@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { formatGuestsForDisplay } = require('../utils/guestUtils');
 
 class InvoiceService {
     constructor() {
@@ -105,7 +106,7 @@ class InvoiceService {
             <strong>Check-in:</strong> ${this.formatDate(bookingData.from_date)} ${bookingData.from_time}<br>
             <strong>Check-out:</strong> ${this.formatDate(bookingData.to_date)} ${bookingData.to_time}<br>
             <strong>Nights:</strong> ${nights}<br>
-            <strong>Guests:</strong> ${bookingData.guests}
+            <strong>Guests:</strong> ${formatGuestsForDisplay(bookingData.guests)}
         `;
 
         const chargesTable = `
