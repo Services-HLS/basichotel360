@@ -435,6 +435,9 @@ const Bookings = () => {
 
   const formatDateForInput = (value: any): string => {
     if (!value) return '';
+    const str = String(value).trim();
+    const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) return isoMatch[1];
     try {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
@@ -443,10 +446,10 @@ const Bookings = () => {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
       }
-      return value;
     } catch {
-      return value;
+      // ignore
     }
+    return '';
   };
 
   const getMinCheckoutDate = (checkInDate: string): string => formatDateForInput(checkInDate);
@@ -1770,6 +1773,9 @@ const Bookings = () => {
   ]);
 
   const handleCheckoutClick = (booking: Booking) => {
+    setEditingBookingId(null);
+    setEditForm({});
+    setEditAmountBaseline(null);
     setCheckoutBooking(booking);
     setBreakfastTaken(false);
     setBreakfastPrice(150);
@@ -2194,6 +2200,10 @@ const Bookings = () => {
 
       const updates: any = {
         status: 'completed',
+        fromDate: formatDateForInput(checkoutBooking.rawFromDate || checkoutBooking.fromDate),
+        toDate: formatDateForInput(checkoutBooking.rawToDate || checkoutBooking.toDate),
+        fromTime: checkoutBooking.rawFromTime || checkoutBooking.fromTime || '14:00',
+        toTime: checkoutBooking.rawToTime || checkoutBooking.toTime || '12:00',
         amount: newRoomAmount,
         service: totalService,
         cgst,
@@ -2592,17 +2602,13 @@ const Bookings = () => {
       }
 
       if (updates.fromDate !== undefined) {
-        const date = new Date(updates.fromDate);
-        if (!isNaN(date.getTime())) {
-          backendUpdates.from_date = date.toISOString().split('T')[0];
-        }
+        const normalized = formatDateForInput(updates.fromDate);
+        if (normalized) backendUpdates.from_date = normalized;
       }
 
       if (updates.toDate !== undefined) {
-        const date = new Date(updates.toDate);
-        if (!isNaN(date.getTime())) {
-          backendUpdates.to_date = date.toISOString().split('T')[0];
-        }
+        const normalized = formatDateForInput(updates.toDate);
+        if (normalized) backendUpdates.to_date = normalized;
       }
 
       if (updates.fromTime !== undefined) backendUpdates.from_time = updates.fromTime;
@@ -2649,6 +2655,15 @@ const Bookings = () => {
               title: "Room Not Available",
               description: responseData.message || "This room is already booked for the selected dates",
               variant: "destructive"
+            });
+            return false;
+          }
+
+          if (responseData.error === 'INVALID_DATES') {
+            toast({
+              title: 'Invalid dates',
+              description: responseData.message || 'Checkout date cannot be before check-in date.',
+              variant: 'destructive',
             });
             return false;
           }

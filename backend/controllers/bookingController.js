@@ -18,6 +18,7 @@ const SchedulerService = require('../services/schedulerService');
 const { isBasicHotelPlan } = require('../utils/planUtils');
 const { getPaymentBreakdown, parseCheckoutPaid } = require('../utils/paymentBreakdown');
 const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
+const { normalizeDateToYMD, isCheckoutOnOrAfterCheckin } = require('../utils/dateUtils');
 
 const fs = require('fs');
 const path = require('path');
@@ -874,10 +875,10 @@ const bookingController = {
 
       const resolvedFromDate = bookingData.from_date || currentBooking.from_date;
       const resolvedToDate = bookingData.to_date || currentBooking.to_date;
-      const fromDateStr = resolvedFromDate ? String(resolvedFromDate).slice(0, 10) : '';
-      const toDateStr = resolvedToDate ? String(resolvedToDate).slice(0, 10) : '';
+      const fromDateStr = normalizeDateToYMD(resolvedFromDate);
+      const toDateStr = normalizeDateToYMD(resolvedToDate);
 
-      if (fromDateStr && toDateStr && toDateStr < fromDateStr) {
+      if (fromDateStr && toDateStr && !isCheckoutOnOrAfterCheckin(fromDateStr, toDateStr)) {
         return res.status(400).json({
           success: false,
           error: 'INVALID_DATES',
