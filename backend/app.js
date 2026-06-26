@@ -134,13 +134,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.options('*', cors(corsOptions));
 
 EmailService.testConnection().then(isConnected => {
+  SchedulerService.startAutoCheckout();
+
   if (isConnected) {
     console.log('✅ Email service ready');
-    // Start scheduler only if email is configured
     SchedulerService.start();
     console.log('✅ Trial management service started');
   } else {
-    console.log('⚠️ Email service not configured - skipping scheduler');
+    console.log('⚠️ Email service not configured - skipping email/WhatsApp reminders');
   }
 });
 console.log('🔄 Trial service initialized');

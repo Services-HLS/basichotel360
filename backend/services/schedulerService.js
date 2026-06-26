@@ -592,6 +592,64 @@ async checkFutureBookings() {
     }
   }
 
+  // Automatically mark stays as completed when checkout date+time passes
+  async autoCompleteExpiredCheckouts() {
+    try {
+      const [bookings] = await pool.execute(`
+        SELECT b.id, b.hotel_id, b.room_id, b.to_date, b.to_time, b.status
+        FROM bookings b
+        WHERE (b.status = 'booked' OR b.status IS NULL OR b.status = '')
+          AND b.to_date IS NOT NULL
+          AND b.to_date <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      `);
+
+      const now = new Date();
+      let completedCount = 0;
+      const Room = require('../models/Room');
+
+      for (const booking of bookings) {
+        const checkoutAt = this.safeParseDate(booking.to_date, booking.to_time || '12:00');
+        if (!checkoutAt || checkoutAt > now) continue;
+
+        const [result] = await pool.execute(
+          `UPDATE bookings SET status = 'completed' WHERE id = ? AND hotel_id = ?`,
+          [booking.id, booking.hotel_id]
+        );
+
+        if (!result.affectedRows) continue;
+
+        if (booking.room_id) {
+          try {
+            await Room.updateStatus(booking.room_id, booking.hotel_id, 'available');
+          } catch (roomError) {
+            console.error(`❌ Failed to free room ${booking.room_id} after auto-checkout:`, roomError);
+          }
+        }
+
+        completedCount++;
+        console.log(`✅ Auto-completed booking ${booking.id} at checkout time`);
+      }
+
+      if (completedCount > 0) {
+        console.log(`📋 Auto-checkout run: ${completedCount} booking(s) marked completed`);
+      }
+    } catch (error) {
+      console.error('❌ Auto-complete checkout error:', error);
+    }
+  }
+
+  startAutoCheckout() {
+    console.log('🚀 Starting auto-checkout scheduler (every 5 minutes)');
+
+    this.autoCompleteExpiredCheckouts();
+
+    cron.schedule('*/5 * * * *', () => {
+      this.autoCompleteExpiredCheckouts();
+    });
+
+    console.log('✅ Auto-checkout scheduler started');
+  }
+
   // Start the scheduler
   start() {
     console.log('🚀 Starting email scheduler...');

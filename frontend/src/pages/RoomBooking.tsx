@@ -71,6 +71,7 @@ import MaintenanceForm from '@/components/MaintenanceForm';
 import QuotationForm from '@/components/QuotationForm';
 import AddRoomModal from '@/components/AddRoomModal';
 import MultiRoomBookingForm from '@/components/MultiRoomBookingForm';
+import CustomTimePicker from '@/components/CustomTimePicker';
 
 // URLs
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzexlVpr_2umhzBdpoW4juzQo4rj2zB1pU3vlz6wqY78YQX3d2BFntfiV7dgLf6PvC/exec';
@@ -867,6 +868,33 @@ const RoomBooking = () => {
       checkInTime: normalizeBookingTime(booking.checkInTime, '14:00'),
       checkOutTime: normalizeBookingTime(booking.checkOutTime, '12:00'),
     });
+  };
+
+  const navigateToBookingCheckout = () => {
+    if (!editingOccupyingBooking) return;
+
+    const status = String(editingOccupyingBooking.status || '').toLowerCase();
+    if (status && status !== 'booked') {
+      toast({
+        title: 'Checkout unavailable',
+        description: 'This booking is not an active stay.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (userSource !== 'database' && userPlan !== 'pro') {
+      toast({
+        title: 'Checkout unavailable',
+        description: 'Open the Checkout tab for database bookings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const bookingId = getBookingIdForEdit(editingOccupyingBooking);
+    closeOccupyingBookingEdit();
+    navigate(`/bookings?checkout=${bookingId}`);
   };
 
   const closeOccupyingBookingEdit = () => {
@@ -4027,16 +4055,14 @@ const RoomBooking = () => {
                     }}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Check-in time</Label>
-                  <Input
-                    type="time"
-                    value={editOccupyingForm.checkInTime}
-                    onChange={(e) =>
-                      setEditOccupyingForm((prev) => ({ ...prev, checkInTime: e.target.value }))
-                    }
-                  />
-                </div>
+                <CustomTimePicker
+                  label="Check-in time"
+                  value={editOccupyingForm.checkInTime}
+                  onChange={(checkInTime) =>
+                    setEditOccupyingForm((prev) => ({ ...prev, checkInTime }))
+                  }
+                  defaultTime="14:00"
+                />
                 <div className="space-y-1.5">
                   <Label>Checkout date</Label>
                   <Input
@@ -4048,16 +4074,14 @@ const RoomBooking = () => {
                     }
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Checkout time</Label>
-                  <Input
-                    type="time"
-                    value={editOccupyingForm.checkOutTime}
-                    onChange={(e) =>
-                      setEditOccupyingForm((prev) => ({ ...prev, checkOutTime: e.target.value }))
-                    }
-                  />
-                </div>
+                <CustomTimePicker
+                  label="Checkout time"
+                  value={editOccupyingForm.checkOutTime}
+                  onChange={(checkOutTime) =>
+                    setEditOccupyingForm((prev) => ({ ...prev, checkOutTime }))
+                  }
+                  defaultTime="12:00"
+                />
               </div>
 
               <div className="rounded-md bg-blue-50 border border-blue-100 p-3 text-sm text-blue-900">
@@ -4120,10 +4144,22 @@ const RoomBooking = () => {
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
                 <Button variant="outline" onClick={closeOccupyingBookingEdit} disabled={savingOccupyingEdit}>
                   Cancel
                 </Button>
+                {(userSource === 'database' || userPlan === 'pro') &&
+                  String(editingOccupyingBooking.status || 'booked').toLowerCase() === 'booked' && (
+                    <Button
+                      type="button"
+                      onClick={navigateToBookingCheckout}
+                      disabled={savingOccupyingEdit}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Checkout
+                    </Button>
+                  )}
                 <Button
                   onClick={saveOccupyingBookingEdit}
                   disabled={savingOccupyingEdit}

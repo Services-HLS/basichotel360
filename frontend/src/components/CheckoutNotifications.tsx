@@ -17,16 +17,20 @@ import { Badge } from '@/components/ui/badge';
 import {
   BOOKINGS_UPDATED_EVENT,
   formatCheckoutDisplay,
-  isPendingCheckoutBooking,
+  getMinutesUntilCheckout,
+  isUpcomingCheckoutBooking,
   type BookingLike,
 } from '@/lib/bookingCheckoutUtils';
 import {
   BOOKING_CREATED_EVENT,
+  CHECKOUT_REMINDER_EVENT,
   getPersistedBookingNotifications,
   getReadBookingNotificationIds,
+  getReadCheckoutReminderIds,
   isRecentUnreadBookingFromApi,
   mapApiBookingToNotification,
   markBookingNotificationRead,
+  markCheckoutReminderRead,
   mergeBookingNotifications,
   type BookingNotification,
 } from '@/lib/appNotifications';
@@ -37,16 +41,17 @@ import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
 
-type PendingItem = {
+type UpcomingCheckoutItem = {
   bookingId: string;
   customerName: string;
   roomNumber: string;
   checkoutLabel: string;
+  minutesLeft: number;
 };
 
-function mapApiBooking(raw: any): BookingLike & PendingItem {
+function mapApiBooking(raw: any): BookingLike & UpcomingCheckoutItem {
   const bookingId = String(raw.id);
-  const mapped: BookingLike & PendingItem = {
+  const mapped: BookingLike & UpcomingCheckoutItem = {
     status: raw.status || 'booked',
     rawFromDate: raw.from_date,
     rawToDate: raw.to_date,
@@ -56,8 +61,10 @@ function mapApiBooking(raw: any): BookingLike & PendingItem {
     customerName: raw.customer_name || 'Guest',
     roomNumber: raw.room_number || '—',
     checkoutLabel: '',
+    minutesLeft: 0,
   };
   mapped.checkoutLabel = formatCheckoutDisplay(mapped);
+  mapped.minutesLeft = getMinutesUntilCheckout(mapped) ?? 0;
   return mapped;
 }
 
@@ -66,7 +73,7 @@ type NotificationPanelProps = {
   loading: boolean;
   showBookingNotifications: boolean;
   bookingItems: BookingNotification[];
-  checkoutItems: PendingItem[];
+  checkoutItems: UpcomingCheckoutItem[];
   onOpenBooking: (bookingId: string) => void;
   onOpenCheckout: (bookingId: string) => void;
   onViewAllCheckout: () => void;
@@ -158,10 +165,10 @@ function NotificationPanel({
       )}
 
       <div className={cn('shrink-0 border-b', compact ? 'px-2.5 py-1.5' : 'px-3 py-2')}>
-        <p className={cn('font-semibold', compact ? 'text-xs' : 'text-sm')}>Pending checkout</p>
+        <p className={cn('font-semibold', compact ? 'text-xs' : 'text-sm')}>Checkout soon</p>
         {!compact && (
           <p className="text-xs text-muted-foreground">
-            Past checkout time — complete checkout to free the room
+            Within 1 hour — collect payment or add charges before auto-checkout
           </p>
         )}
       </div>
@@ -189,7 +196,7 @@ function NotificationPanel({
               compact ? 'px-2.5 py-3 text-xs' : 'px-3 py-6 text-sm'
             )}
           >
-            No overdue checkouts
+            No checkouts in the next hour
           </p>
         ) : (
           checkoutItems.map((item) => (
@@ -219,14 +226,14 @@ function NotificationPanel({
                 </div>
                 <Badge
                   variant="outline"
-                  className="shrink-0 h-4 px-1 text-[9px] bg-orange-50 text-orange-800 border-orange-200"
+                  className="shrink-0 h-4 px-1 text-[9px] bg-amber-50 text-amber-800 border-amber-200"
                 >
-                  Due
+                  {item.minutesLeft <= 60 ? `${item.minutesLeft}m` : 'Soon'}
                 </Badge>
               </div>
               <p
                 className={cn(
-                  'text-orange-700 truncate',
+                  'text-amber-800 truncate',
                   compact ? 'text-[10px] mt-0.5' : 'text-[11px] mt-1'
                 )}
               >
@@ -246,7 +253,7 @@ function NotificationPanel({
               className={cn('w-full', compact ? 'h-7 text-[10px]' : 'text-xs')}
               onClick={onViewAllCheckout}
             >
-              Pending checkout ({checkoutItems.length})
+              Checkout soon ({checkoutItems.length})
             </Button>
           )}
           {showBookingNotifications && bookingItems.length > 0 && (
@@ -270,7 +277,7 @@ export default function CheckoutNotifications() {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checkoutItems, setCheckoutItems] = useState<PendingItem[]>([]);
+  const [checkoutItems, setCheckoutItems] = useState<UpcomingCheckoutItem[]>([]);
   const [bookingItems, setBookingItems] = useState<BookingNotification[]>([]);
 
   const user = getCurrentUser();
@@ -297,8 +304,14 @@ export default function CheckoutNotifications() {
       const json = await res.json();
       const rows = json.data || [];
 
-      const pendingCheckout = rows.map(mapApiBooking).filter(isPendingCheckoutBooking);
-      setCheckoutItems(pendingCheckout);
+      const readReminderIds = getReadCheckoutReminderIds();
+      const upcomingCheckout = rows
+        .map(mapApiBooking)
+        .filter(
+          (b) =>
+            isUpcomingCheckoutBooking(b) && !readReminderIds.has(b.bookingId)
+        );
+      setCheckoutItems(upcomingCheckout);
 
       if (showBookingNotifications) {
         const readIds = getReadBookingNotificationIds();
@@ -333,14 +346,16 @@ export default function CheckoutNotifications() {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 60_000);
+    const interval = setInterval(loadNotifications, 30_000);
     const onUpdate = () => loadNotifications();
     window.addEventListener(BOOKINGS_UPDATED_EVENT, onUpdate);
     window.addEventListener(BOOKING_CREATED_EVENT, onUpdate);
+    window.addEventListener(CHECKOUT_REMINDER_EVENT, onUpdate);
     return () => {
       clearInterval(interval);
       window.removeEventListener(BOOKINGS_UPDATED_EVENT, onUpdate);
       window.removeEventListener(BOOKING_CREATED_EVENT, onUpdate);
+      window.removeEventListener(CHECKOUT_REMINDER_EVENT, onUpdate);
     };
   }, [loadNotifications]);
 
@@ -356,8 +371,10 @@ export default function CheckoutNotifications() {
   };
 
   const openCheckout = (bookingId: string) => {
+    markCheckoutReminderRead(bookingId);
     setOpen(false);
-    navigate(`/bookings?status=pending_checkout&focus=${bookingId}`);
+    setCheckoutItems((prev) => prev.filter((item) => item.bookingId !== bookingId));
+    navigate(`/bookings?status=checkout_soon&focus=${bookingId}`);
   };
 
   const panelProps: NotificationPanelProps = {
@@ -370,7 +387,7 @@ export default function CheckoutNotifications() {
     onOpenCheckout: openCheckout,
     onViewAllCheckout: () => {
       setOpen(false);
-      navigate('/bookings?status=pending_checkout');
+      navigate('/bookings?status=checkout_soon');
     },
     onViewAllBookings: () => {
       setOpen(false);

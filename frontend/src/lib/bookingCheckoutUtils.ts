@@ -98,13 +98,41 @@ export function isBookingBlockingRoom(booking: BookingLike): boolean {
   return false;
 }
 
-/** Checkout date+time has passed but formal checkout not done in Checkout tab */
+/** Default lead time for in-app checkout reminders */
+export const CHECKOUT_REMINDER_MS = 60 * 60 * 1000;
+
+function isActiveBookedStatus(status?: string): boolean {
+  const s = String(status || '').toLowerCase();
+  return !s || s === 'booked';
+}
+
+/** Checkout date+time has passed but status is still booked (until server auto-completes) */
 export function isPendingCheckoutBooking(booking: BookingLike): boolean {
-  const s = String(booking.status || '').toLowerCase();
-  if (s !== 'booked') return false;
+  if (!isActiveBookedStatus(booking.status)) return false;
   const checkoutAt = getBookingCheckoutMoment(booking);
   if (!checkoutAt) return false;
   return Date.now() >= checkoutAt.getTime();
+}
+
+/** Checkout is within the next hour — show staff reminder before auto-checkout */
+export function isUpcomingCheckoutBooking(
+  booking: BookingLike,
+  withinMs: number = CHECKOUT_REMINDER_MS
+): boolean {
+  if (!isActiveBookedStatus(booking.status)) return false;
+  const checkoutAt = getBookingCheckoutMoment(booking);
+  if (!checkoutAt) return false;
+  const now = Date.now();
+  const checkoutMs = checkoutAt.getTime();
+  return checkoutMs > now && checkoutMs - now <= withinMs;
+}
+
+export function getMinutesUntilCheckout(booking: BookingLike): number | null {
+  const checkoutAt = getBookingCheckoutMoment(booking);
+  if (!checkoutAt) return null;
+  const diff = checkoutAt.getTime() - Date.now();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / (60 * 1000));
 }
 
 function startOfDay(d: Date): Date {

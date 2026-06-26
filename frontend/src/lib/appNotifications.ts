@@ -16,7 +16,9 @@ export type BookingNotification = {
 
 const STORAGE_KEY = 'hms-booking-notifications';
 const READ_KEY = 'hms-booking-notifications-read';
+const CHECKOUT_REMINDER_READ_KEY = 'hms-checkout-reminder-read';
 export const BOOKING_CREATED_EVENT = 'hms-booking-created';
+export const CHECKOUT_REMINDER_EVENT = 'hms-checkout-reminder';
 
 /** Show API-sourced booking alerts for this long after creation */
 const RECENT_BOOKING_MS = 72 * 60 * 60 * 1000;
@@ -91,6 +93,19 @@ export function isRecentUnreadBookingFromApi(
   if (!createdAt || Number.isNaN(createdAt)) return false;
 
   return Date.now() - createdAt <= RECENT_BOOKING_MS;
+}
+
+export function getReadCheckoutReminderIds(): Set<string> {
+  const ids = safeParse<string[]>(localStorage.getItem(CHECKOUT_REMINDER_READ_KEY), []);
+  return new Set(ids);
+}
+
+export function markCheckoutReminderRead(bookingId: string) {
+  const read = getReadCheckoutReminderIds();
+  read.add(String(bookingId));
+  const trimmed = [...read].slice(-200);
+  localStorage.setItem(CHECKOUT_REMINDER_READ_KEY, JSON.stringify(trimmed));
+  window.dispatchEvent(new CustomEvent(CHECKOUT_REMINDER_EVENT));
 }
 
 export function mergeBookingNotifications(

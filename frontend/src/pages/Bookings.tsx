@@ -3,7 +3,7 @@
 
 
 import PreviousBookingForm from '@/components/PreviousBookingForm';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
@@ -78,7 +78,7 @@ import { format } from 'date-fns';
 import { isAdmin } from '@/lib/permissions';
 import { isBasicDatabaseUser } from '@/lib/planUtils';
 import {
-  isPendingCheckoutBooking,
+  isUpcomingCheckoutBooking,
   notifyBookingsUpdated,
 } from '@/lib/bookingCheckoutUtils';
 
@@ -325,9 +325,11 @@ const Bookings = () => {
   });
   const [showCalendarFilter, setShowCalendarFilter] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const focusBookingId = searchParams.get('focus');
   const editBookingId = searchParams.get('edit');
+  const checkoutOpenId = searchParams.get('checkout');
+  const checkoutOpenedRef = useRef<string | null>(null);
 
   // Report states
   const [reportLoading, setReportLoading] = useState(false);
@@ -384,8 +386,8 @@ const Bookings = () => {
 
   useEffect(() => {
     const status = searchParams.get('status');
-    if (status === 'pending_checkout') {
-      setSelectedStatus('pending_checkout');
+    if (status === 'checkout_soon' || status === 'pending_checkout') {
+      setSelectedStatus('checkout_soon');
     }
   }, [searchParams]);
 
@@ -1673,7 +1675,14 @@ const Bookings = () => {
     const originalBookingTotal =
       booking.total ||
       baseRoomAmount + bookedService + (booking.gst || bookedGst);
-    const advancePaid = booking.advance_amount_paid || 0;
+    let advancePaid = booking.advance_amount_paid || 0;
+    // Legacy bookings: full payment at booking but advance_amount_paid not stored
+    if (
+      advancePaid <= 0 &&
+      String(booking.payment_status || '').toLowerCase() === 'completed'
+    ) {
+      advancePaid = originalBookingTotal;
+    }
     const balanceDue = Math.max(0, estimatedTotal - advancePaid);
 
     return {
@@ -1758,19 +1767,7 @@ const Bookings = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutModalOpen, checkoutPaymentMethod, checkoutAmountToPay]);
 
-  // Keep "amount to pay" in sync when bill changes (add-ons, discount)
-  useEffect(() => {
-    if (!checkoutModalOpen || !checkoutTotals) return;
-    const target = checkoutTotals.advancePaid > 0
-      ? checkoutTotals.balanceDue
-      : checkoutTotals.estimatedTotal;
-    setCheckoutAmountToPay(target);
-  }, [
-    checkoutModalOpen,
-    checkoutTotals?.estimatedTotal,
-    checkoutTotals?.balanceDue,
-    checkoutTotals?.advancePaid,
-  ]);
+  // Do not auto-fill checkout payment — staff must enter what was collected (or use Pay Full Balance)
 
   const handleCheckoutClick = (booking: Booking) => {
     setEditingBookingId(null);
@@ -1795,12 +1792,8 @@ const Bookings = () => {
     setCheckoutDiscountValue(0);
     setCheckoutActiveTab(isBasicDbUser ? 'payment' : 'services');
 
-    const advancePaid = booking.advance_amount_paid || 0;
-    const initialTotal = booking.total || 0;
-    const initialPay = advancePaid > 0
-      ? Math.max(0, initialTotal - advancePaid)
-      : initialTotal;
-    setCheckoutAmountToPay(initialPay);
+    // Start empty so staff must enter collected amount (error shown if Complete Checkout with balance still due)
+    setCheckoutAmountToPay(0);
     setBookingModalView('main');
     setCheckoutModalOpen(true);
   };
@@ -2138,15 +2131,34 @@ const Bookings = () => {
     } = checkoutTotals;
 
     const maxPayable = advancePaid > 0 ? balanceDue : estimatedTotal;
-    if (checkoutAmountToPay <= 0) {
-      toast({
-        title: 'Payment amount required',
-        description: 'Enter the amount the client is paying at checkout',
-        variant: 'destructive',
-      });
-      return;
+    const nothingDueAtCheckout = balanceDue <= 0.01;
+
+    if (!nothingDueAtCheckout) {
+      if (checkoutAmountToPay <= 0) {
+        toast({
+          title: 'Remaining balance due',
+          description: advancePaid > 0
+            ? `Collect ₹${balanceDue.toLocaleString('en-IN')} from the guest before completing checkout (₹${advancePaid.toLocaleString('en-IN')} advance already paid at booking).`
+            : `Enter ₹${estimatedTotal.toLocaleString('en-IN')} — full bill must be collected at checkout.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (checkoutAmountToPay < balanceDue - 0.01) {
+        const shortfall = balanceDue - checkoutAmountToPay;
+        toast({
+          title: 'Remaining balance due',
+          description: `Collect ₹${shortfall.toLocaleString('en-IN')} more to clear the full balance of ₹${balanceDue.toLocaleString('en-IN')}.`,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
-    if (checkoutPaymentMethod === 'online' && checkoutPaymentStatus !== 'completed') {
+    if (
+      checkoutPaymentMethod === 'online' &&
+      checkoutPaymentStatus !== 'completed' &&
+      checkoutAmountToPay > 0.01
+    ) {
       toast({
         title: 'Verify online payment',
         description: 'Ask the guest to scan the QR code, then click "I have made the payment".',
@@ -2191,9 +2203,9 @@ const Bookings = () => {
       const totalPaid = advancePaid + checkoutAmountToPay;
       const newRemaining = Math.max(0, estimatedTotal - totalPaid);
 
-      // Completing checkout = bill closed. If client paid anything at desk, mark completed.
+      // Bill is closed only when nothing remains after this checkout payment
       let finalPaymentStatus: 'completed' | 'partial' | 'pending' = 'completed';
-      if (checkoutAmountToPay <= 0 && newRemaining > 0.01) {
+      if (newRemaining > 0.01) {
         finalPaymentStatus =
           checkoutPaymentStatus === 'pending' ? 'pending' : 'partial';
       }
@@ -2220,8 +2232,8 @@ const Bookings = () => {
         advance_amount_paid: totalPaid,
         remaining_amount: newRemaining,
         special_requests: checkoutBooking.special_requests 
-          ? `${checkoutBooking.special_requests}\nCheckout: paid ₹${checkoutAmountToPay.toFixed(2)}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
-          : `Checkout: paid ₹${checkoutAmountToPay.toFixed(2)}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
+          ? `${checkoutBooking.special_requests}\nCheckout: ${nothingDueAtCheckout ? 'no balance due (paid at booking)' : `paid ₹${checkoutAmountToPay.toFixed(2)}`}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
+          : `Checkout: ${nothingDueAtCheckout ? 'no balance due (paid at booking)' : `paid ₹${checkoutAmountToPay.toFixed(2)}`}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
       };
 
       const success = await updateBooking(checkoutBooking.bookingId, updates);
@@ -3291,6 +3303,12 @@ const Bookings = () => {
         icon: AlertCircle,
         className: 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100',
       },
+      checkout_soon: {
+        variant: 'outline',
+        label: 'Checkout Soon',
+        icon: AlertCircle,
+        className: 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100',
+      },
       blocked: {
         variant: 'destructive',
         label: 'Blocked',
@@ -3322,8 +3340,8 @@ const Bookings = () => {
   };
 
   const getBookingStatusBadge = (booking: Booking) => {
-    if (isPendingCheckoutBooking(booking)) {
-      return getStatusBadge('pending_checkout');
+    if (isUpcomingCheckoutBooking(booking)) {
+      return getStatusBadge('checkout_soon');
     }
     return getStatusBadge(booking.status);
   };
@@ -3353,15 +3371,15 @@ const Bookings = () => {
   const statusOptions = [
     { value: 'all', label: 'All Status' },
     { value: 'booked', label: 'Booked' },
-    { value: 'pending_checkout', label: 'Pending Checkout' },
+    { value: 'checkout_soon', label: 'Checkout Soon (1h)' },
     { value: 'blocked', label: 'Blocked' },
     { value: 'maintenance', label: 'Maintenance' },
     { value: 'completed', label: 'Checkout' },
     { value: 'cancelled', label: 'Cancelled' }
   ];
 
-  const pendingCheckoutCount = useMemo(
-    () => bookings.filter((b) => isPendingCheckoutBooking(b)).length,
+  const upcomingCheckoutCount = useMemo(
+    () => bookings.filter((b) => isUpcomingCheckoutBooking(b)).length,
     [bookings]
   );
 
@@ -3389,11 +3407,11 @@ const Bookings = () => {
       }
 
       let statusPassed = true;
-      if (selectedStatus === 'pending_checkout') {
-        statusPassed = isPendingCheckoutBooking(booking);
+      if (selectedStatus === 'checkout_soon' || selectedStatus === 'pending_checkout') {
+        statusPassed = isUpcomingCheckoutBooking(booking);
       } else if (selectedStatus === 'booked') {
         statusPassed =
-          booking.status.toLowerCase() === 'booked' && !isPendingCheckoutBooking(booking);
+          booking.status.toLowerCase() === 'booked' && !isUpcomingCheckoutBooking(booking);
       } else if (selectedStatus !== 'all') {
         statusPassed = booking.status.toLowerCase() === selectedStatus.toLowerCase();
       }
@@ -3455,6 +3473,32 @@ const Bookings = () => {
     return () => window.clearTimeout(timer);
   }, [editBookingId, filteredBookings]);
 
+  useEffect(() => {
+    if (!checkoutOpenId || filteredBookings.length === 0) return;
+    if (checkoutOpenedRef.current === checkoutOpenId) return;
+
+    const booking = filteredBookings.find(
+      (b) => b.bookingId === checkoutOpenId || String(b.id) === checkoutOpenId
+    );
+    if (!booking) return;
+
+    checkoutOpenedRef.current = checkoutOpenId;
+
+    if (booking.status !== 'booked') {
+      toast({
+        title: 'Checkout unavailable',
+        description: 'This stay is already checked out. Use Actions to view details.',
+      });
+    } else {
+      handleCheckoutClick(booking);
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('checkout');
+    next.set('focus', checkoutOpenId);
+    setSearchParams(next, { replace: true });
+  }, [checkoutOpenId, filteredBookings]);
+
   const filteredFunctionBookings = useMemo(() => {
     const term = functionSearchTerm.toLowerCase();
     return functionBookings.filter(b =>
@@ -3488,6 +3532,17 @@ const Bookings = () => {
       fetchFunctionBookings();
     }
   }, []);
+
+  // Refresh while active stays are open so server auto-checkout is reflected in the UI
+  useEffect(() => {
+    if (userSource !== 'database') return;
+    const hasActiveStay = bookings.some((b) => b.status === 'booked');
+    if (!hasActiveStay) return;
+    const interval = window.setInterval(() => {
+      fetchBookings(true);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [bookings, userSource]);
 
   const handleRefresh = async () => {
     await fetchBookings(true);
@@ -4013,15 +4068,11 @@ const Bookings = () => {
                   size="sm"
                   variant="default"
                   onClick={() => handleCheckoutClick(params.row)}
-                  title={isPendingCheckoutBooking(params.row) ? 'Complete overdue checkout' : 'Checkout customer'}
-                  className={`h-7 px-2 min-w-[75px] text-white border-transparent ${
-                    isPendingCheckoutBooking(params.row)
-                      ? 'bg-orange-600 hover:bg-orange-700'
-                      : 'bg-green-600 hover:bg-green-700'
-                  }`}
+                  title="Checkout — collect payment or add charges"
+                  className="h-7 px-2 min-w-[75px] text-white border-transparent bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                  {isPendingCheckoutBooking(params.row) ? 'Complete' : 'Checkout'}
+                  Checkout
                 </Button>
               )}
               {params.row.status !== 'blocked' && params.row.status !== 'maintenance' && (
@@ -4147,15 +4198,13 @@ const Bookings = () => {
       headerName: 'Customer',
       flex: 1,
       minWidth: 140,
-      renderCell: (params) => {
-        const overdue = isPendingCheckoutBooking(params.row);
-        return (
+      renderCell: (params) => (
         <div className="flex flex-col justify-center h-full leading-tight py-0.5">
           <span className="font-medium text-sm truncate">{params.row.customerName}</span>
           <span className="text-[11px] text-muted-foreground truncate">
             Rm {params.row.roomNumber}
             {params.row.groupBookingId && ' · Group'}
-            {overdue && ' · Overdue'}
+            {isUpcomingCheckoutBooking(params.row) && ' · Soon'}
           </span>
           <span className="text-[10px] text-muted-foreground truncate">
             {params.row.customerPhone || '—'}
@@ -4164,25 +4213,20 @@ const Bookings = () => {
             In: {params.row.fromDate}
           </span>
         </div>
-        );
-      },
+      ),
     },
     {
       field: 'manage',
       headerName: 'Action',
       width: 120,
       sortable: false,
-      renderCell: (params) => {
-        const overdue = isPendingCheckoutBooking(params.row);
-        return (
+      renderCell: (params) => (
         <Button
           size="sm"
           onClick={() => handleCheckoutClick(params.row)}
           className={
             params.row.status === 'booked'
-              ? overdue
-                ? 'h-8 text-xs bg-orange-600 hover:bg-orange-700 text-white'
-                : 'h-8 text-xs bg-green-600 hover:bg-green-700 text-white'
+              ? 'h-8 text-xs bg-green-600 hover:bg-green-700 text-white'
               : 'h-8 text-xs'
           }
           variant={params.row.status === 'booked' ? 'default' : 'outline'}
@@ -4190,7 +4234,7 @@ const Bookings = () => {
           {params.row.status === 'booked' ? (
             <>
               <CheckCircle className="h-3.5 w-3.5 mr-1" />
-              {overdue ? 'Complete Checkout' : 'Checkout'}
+              Checkout
             </>
           ) : (
             <>
@@ -4199,8 +4243,7 @@ const Bookings = () => {
             </>
           )}
         </Button>
-        );
-      },
+      ),
     },
     {
       field: 'toDate',
@@ -5127,22 +5170,22 @@ const Bookings = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {(selectedStatus === 'all' || selectedStatus === 'pending_checkout') && pendingCheckoutCount > 0 && (
+                  {(selectedStatus === 'all' || selectedStatus === 'checkout_soon') && upcomingCheckoutCount > 0 && (
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setSelectedStatus('pending_checkout');
+                        setSelectedStatus('checkout_soon');
                         toast({
                           title: 'Filter Applied',
-                          description: 'Showing overdue checkouts — complete checkout to free the room.',
+                          description: 'Showing checkouts due within the next hour.',
                           duration: 3000,
                         });
                       }}
-                      className={`flex items-center gap-1 h-8 px-3 text-xs ${selectedStatus === 'pending_checkout' ? 'bg-orange-50 border-orange-200 text-orange-700' : ''}`}
+                      className={`flex items-center gap-1 h-8 px-3 text-xs ${selectedStatus === 'checkout_soon' ? 'bg-amber-50 border-amber-200 text-amber-700' : ''}`}
                     >
                       <AlertCircle className="w-3 h-3" />
-                      Pending Checkout ({pendingCheckoutCount})
+                      Checkout Soon ({upcomingCheckoutCount})
                     </Button>
                   )}
 
@@ -5376,12 +5419,12 @@ const Bookings = () => {
                           </thead>
                           <tbody>
                             {filteredBookings.map((booking) => {
-                              const overdue = isPendingCheckoutBooking(booking);
+                              const checkoutSoon = isUpcomingCheckoutBooking(booking);
                               return (
                               <tr
                                 key={`${booking.source}-${booking.bookingId}`}
                                 data-booking-id={booking.bookingId}
-                                className={`border-b last:border-0 hover:bg-muted/40 transition-colors ${overdue ? 'bg-orange-50/60' : ''}`}
+                                className={`border-b last:border-0 hover:bg-muted/40 transition-colors ${checkoutSoon ? 'bg-amber-50/60' : ''}`}
                               >
                                 <td className="p-2 align-middle min-w-[140px]">
                                   <div
@@ -5394,7 +5437,7 @@ const Bookings = () => {
                                     <div className="truncate">
                                       Rm {booking.roomNumber}
                                       {booking.groupBookingId ? ' · Grp' : ''}
-                                      {overdue ? ' · Overdue' : ''}
+                                      {checkoutSoon ? ' · Soon' : ''}
                                     </div>
                                     <div className="truncate">
                                       {booking.customerPhone || '—'}
@@ -5410,9 +5453,7 @@ const Bookings = () => {
                                     onClick={() => handleCheckoutClick(booking)}
                                     className={
                                       booking.status === 'booked'
-                                        ? overdue
-                                          ? 'h-8 text-xs bg-orange-600 hover:bg-orange-700 text-white shrink-0'
-                                          : 'h-8 text-xs bg-green-600 hover:bg-green-700 text-white shrink-0'
+                                        ? 'h-8 text-xs bg-green-600 hover:bg-green-700 text-white shrink-0'
                                         : 'h-8 text-xs shrink-0'
                                     }
                                     variant={booking.status === 'booked' ? 'default' : 'outline'}
@@ -5420,7 +5461,7 @@ const Bookings = () => {
                                     {booking.status === 'booked' ? (
                                       <>
                                         <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                        {overdue ? 'Complete Checkout' : 'Checkout'}
+                                        Checkout
                                       </>
                                     ) : (
                                       <>
@@ -5607,14 +5648,10 @@ const Bookings = () => {
                                   <Button
                                     size="sm"
                                     onClick={() => handleCheckoutClick(booking)}
-                                    className={`h-8 text-xs text-white font-medium flex items-center gap-1 ${
-                                      isPendingCheckoutBooking(booking)
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : 'bg-green-600 hover:bg-green-700'
-                                    }`}
+                                    className="h-8 text-xs text-white font-medium flex items-center gap-1 bg-green-600 hover:bg-green-700"
                                   >
                                     <CheckCircle className="h-3.5 w-3.5" />
-                                    {isPendingCheckoutBooking(booking) ? 'Complete Checkout' : 'Checkout'}
+                                    Checkout
                                   </Button>
                                 )}
 
@@ -7101,6 +7138,23 @@ const Bookings = () => {
                     )}
 
                     <div className="space-y-2 border p-4 rounded-lg bg-gray-50/55">
+                      {checkoutTotals.balanceDue <= 0.01 && checkoutTotals.advancePaid > 0 ? (
+                        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                          <p className="font-medium">No payment needed</p>
+                          <p className="text-xs mt-1 text-green-800">
+                            Advance at booking covers the full bill. Tap Complete Checkout to close the stay.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 mb-2">
+                        <p className="font-medium">Collect balance before checkout</p>
+                        <p className="text-xs mt-1">
+                          {checkoutTotals.advancePaid > 0
+                            ? `₹${checkoutTotals.balanceDue.toLocaleString('en-IN')} remaining after ₹${checkoutTotals.advancePaid.toLocaleString('en-IN')} advance at booking. Enter the amount collected now, or tap Pay Full Balance.`
+                            : `Full bill ₹${checkoutTotals.estimatedTotal.toLocaleString('en-IN')} must be collected. Enter amount or tap Pay Full Amount.`}
+                        </p>
+                      </div>
                       <Label className="text-sm font-semibold">
                         {checkoutTotals.advancePaid > 0
                           ? 'Amount Paying Now (₹) *'
@@ -7133,7 +7187,7 @@ const Bookings = () => {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {checkoutTotals.advancePaid > 0
-                          ? `Maximum: ₹${checkoutTotals.balanceDue.toLocaleString('en-IN')} (remaining after advance)`
+                          ? `Collect the full remaining balance: ₹${checkoutTotals.balanceDue.toLocaleString('en-IN')} (₹${checkoutTotals.advancePaid.toLocaleString('en-IN')} already paid at booking).`
                           : `Maximum: ₹${checkoutTotals.estimatedTotal.toLocaleString('en-IN')} (full bill)`}
                       </p>
                       {checkoutAmountToPay > 0 && (
@@ -7151,6 +7205,8 @@ const Bookings = () => {
                             </div>
                           )}
                         </div>
+                      )}
+                        </>
                       )}
                     </div>
 
