@@ -12,6 +12,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { searchCustomersByPhone } from '@/lib/bookingApi';
+import { notifyBookingCreated } from '@/lib/appNotifications';
+import { notifyAdvanceBooking } from '@/lib/notificationStore';
+import { formatCheckInDisplay, formatCheckoutDisplay, notifyCustomersUpdated } from '@/lib/bookingCheckoutUtils';
+import { defaultCheckInTimeForDate } from '@/lib/dateUtils';
 import {
   User,
   Phone,
@@ -232,7 +236,7 @@ export default function MultiRoomBookingForm({
     return {
       checkInDate: formatLocalDate(checkIn),
       checkOutDate: formatLocalDate(checkOut),
-      checkInTime: '14:00',
+      checkInTime: defaultCheckInTimeForDate(formatLocalDate(checkIn)),
       checkOutTime: '12:00',
       paymentMethod: 'cash' as 'cash' | 'online',
       paymentStatus: 'completed' as 'pending' | 'completed'
@@ -584,8 +588,17 @@ export default function MultiRoomBookingForm({
     if (limitedPhone.length === 10 && userSource === 'database') {
       try {
         const customers = await searchCustomersByPhone(limitedPhone);
-        setFoundCustomers(customers || []);
-        setShowCustomerSearch(customers && customers.length > 0);
+        const list = customers || [];
+        setFoundCustomers(list);
+        if (list.length === 1) {
+          applyCustomerDetails(list[0]);
+          toast({
+            title: "Guest Found",
+            description: `Details loaded for ${list[0].name}`,
+          });
+        } else {
+          setShowCustomerSearch(list.length > 0);
+        }
       } catch (error) {
         console.error('Error searching customers:', error);
         setFoundCustomers([]);
@@ -598,10 +611,21 @@ export default function MultiRoomBookingForm({
     }
   };
 
-  const selectCustomer = (customer: any) => {
+  const applyCustomerDetails = (customer: any) => {
     setSelectedCustomer(customer);
-    setCustomerData({
-      ...customerData,
+
+    const images: string[] = [];
+    if (customer.id_image) images.push(customer.id_image);
+    if (customer.id_image2) images.push(customer.id_image2);
+    setIdImages((prev) => {
+      prev.forEach((img) => {
+        if (img?.startsWith('blob:')) URL.revokeObjectURL(img);
+      });
+      return images;
+    });
+
+    setCustomerData((prev) => ({
+      ...prev,
       name: customer.name || '',
       phone: customer.phone || '',
       email: customer.email || '',
@@ -610,11 +634,14 @@ export default function MultiRoomBookingForm({
       state: customer.state || '',
       pincode: customer.pincode || '',
       idType: customer.id_type || customer.idType || 'aadhaar',
-      idNumber: customer.id_number || customer.idNumber || ''
-    });
+      idNumber: customer.id_number || customer.idNumber || '',
+    }));
     setShowCustomerSearch(false);
     setFoundCustomers([]);
+  };
 
+  const selectCustomer = (customer: any) => {
+    applyCustomerDetails(customer);
     toast({
       title: "Customer Selected",
       description: `Details loaded for ${customer.name}`,
@@ -1130,6 +1157,7 @@ export default function MultiRoomBookingForm({
           guests: config.guests,
           special_requests: customerData.specialRequests,
           id_type: customerData.idType,
+          customer_id_number: customerData.idNumber,
           id_number: customerData.idNumber,
           id_image: idImages.length > 0 ? idImages[0] : null,
           id_image2: idImages.length > 1 ? idImages[1] : null,
@@ -1191,13 +1219,46 @@ export default function MultiRoomBookingForm({
             title: "✅ Group Converted Successfully!",
             description: `${result.data.totalSuccess} rooms converted from advance bookings. Advance payments applied.`,
           });
+          for (const entry of result.data?.successful ?? []) {
+            const room = selectedRooms.find(
+              (r) => String(r.roomId) === String(entry.room_id)
+            );
+            notifyAdvanceBooking({
+              bookingId: String(entry.advance_booking_id ?? entry.bookingId),
+              customerName: customerData.name,
+              roomNumber: String(room?.number ?? '—'),
+              checkInDate: bookingDetails.checkInDate,
+              kind: 'converted',
+            });
+          }
         } else {
           toast({
             title: "✅ Success!",
             description: `${result.data.totalSuccess} rooms booked successfully`,
           });
+          const bookingLike = {
+            rawFromDate: bookingDetails.checkInDate,
+            rawToDate: bookingDetails.checkOutDate,
+            fromTime: bookingDetails.checkInTime,
+            toTime: bookingDetails.checkOutTime,
+          };
+          for (const entry of result.data?.successful ?? []) {
+            const room = selectedRooms.find(
+              (r) => String(r.roomId) === String(entry.room_id)
+            );
+            if (!entry.bookingId) continue;
+            notifyBookingCreated({
+              bookingId: String(entry.bookingId),
+              customerName: customerData.name,
+              roomNumber: String(room?.number ?? '—'),
+              checkInLabel: formatCheckInDisplay(bookingLike),
+              checkOutLabel: formatCheckoutDisplay(bookingLike),
+              createdAt: new Date().toISOString(),
+            });
+          }
         }
 
+        notifyCustomersUpdated();
         onSuccess();
         onClose();
       } else {
@@ -1881,7 +1942,13 @@ export default function MultiRoomBookingForm({
                   <Input
                     type="date"
                     value={bookingDetails.checkInDate}
-                    onChange={(e) => setBookingDetails({ ...bookingDetails, checkInDate: e.target.value })}
+                    onChange={(e) =>
+                      setBookingDetails({
+                        ...bookingDetails,
+                        checkInDate: e.target.value,
+                        checkInTime: defaultCheckInTimeForDate(e.target.value),
+                      })
+                    }
                     min={new Date().toISOString().split('T')[0]}
                   />
                 </div>

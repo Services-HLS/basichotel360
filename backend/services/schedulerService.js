@@ -3,6 +3,7 @@
 const EmailService = require('./emailService');
 const { pool } = require('../config/database');
 const cron = require('node-cron');
+const notificationEvents = require('./notificationEvents');
 
 class SchedulerService {
   constructor() {
@@ -221,6 +222,16 @@ async sendReminderForBooking(booking) {
     // Send WHATSAPP reminder if phone exists
     if (customerDetails.phone) {
       await this.sendWhatsAppReminder(booking);
+    }
+
+    const hoursLeft = this.getHoursUntilCheckout(booking);
+    if (hoursLeft != null && hoursLeft > 0 && hoursLeft <= 1) {
+      await notificationEvents.notifyCheckoutSoon(booking.hotel_id, {
+        bookingId: booking.id,
+        customerName: booking.customer_name,
+        roomNumber: booking.room_number,
+        minutesLeft: Math.ceil(hoursLeft * 60),
+      });
     }
 
     // Mark as sent
@@ -596,8 +607,12 @@ async checkFutureBookings() {
   async autoCompleteExpiredCheckouts() {
     try {
       const [bookings] = await pool.execute(`
-        SELECT b.id, b.hotel_id, b.room_id, b.to_date, b.to_time, b.status
+        SELECT b.id, b.hotel_id, b.room_id, b.to_date, b.to_time, b.status,
+               r.room_number,
+               c.name AS customer_name
         FROM bookings b
+        LEFT JOIN rooms r ON r.id = b.room_id
+        LEFT JOIN customers c ON c.id = b.customer_id
         WHERE (b.status = 'booked' OR b.status IS NULL OR b.status = '')
           AND b.to_date IS NOT NULL
           AND b.to_date <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
@@ -610,6 +625,18 @@ async checkFutureBookings() {
       for (const booking of bookings) {
         const checkoutAt = this.safeParseDate(booking.to_date, booking.to_time || '12:00');
         if (!checkoutAt || checkoutAt > now) continue;
+
+        await notificationEvents.notifyPendingCheckout(booking.hotel_id, {
+          bookingId: booking.id,
+          customerName: booking.customer_name,
+          roomNumber: booking.room_number,
+        });
+
+        await notificationEvents.notifyRoomNeedsCleaning(booking.hotel_id, {
+          bookingId: booking.id,
+          customerName: booking.customer_name,
+          roomNumber: booking.room_number,
+        });
 
         const [result] = await pool.execute(
           `UPDATE bookings SET status = 'completed' WHERE id = ? AND hotel_id = ?`,

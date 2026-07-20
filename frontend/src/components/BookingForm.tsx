@@ -3647,9 +3647,20 @@ import {
   formatCheckInDisplay,
   formatCheckoutDisplay,
   notifyBookingsUpdated,
+  notifyCustomersUpdated,
 } from '@/lib/bookingCheckoutUtils';
 import { notifyBookingCreated } from '@/lib/appNotifications';
+import { notifyAdvanceBooking } from '@/lib/notificationStore';
 import { isBasicDatabaseUser } from '@/lib/planUtils';
+import {
+  defaultCheckInTimeForDate,
+  localDateStr,
+} from '@/lib/dateUtils';
+import { UpiAppSelector } from '@/components/UpiAppSelector';
+import {
+  formatBookingPaymentLabel,
+  type UpiPaymentAppId,
+} from '@/lib/upiPaymentApps';
 
 interface DateRange {
   from: Date | undefined;
@@ -4103,6 +4114,9 @@ export default function BookingForm({
 }: BookingFormProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement>(null);
+  const webcamCanvasRef = useRef<HTMLCanvasElement>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
 
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
   const userPlan = currentUser?.plan || 'basic';
@@ -4115,6 +4129,9 @@ export default function BookingForm({
   const [activeStep, setActiveStep] = useState(1);
   const [idImages, setIdImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [webcamOpen, setWebcamOpen] = useState(false);
+  const [startingWebcam, setStartingWebcam] = useState(false);
+  const [capturingWebcam, setCapturingWebcam] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cash' | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'completed' | 'failed'>('pending');
   const [qrCodeData, setQrCodeData] = useState<string>('');
@@ -4169,6 +4186,8 @@ export default function BookingForm({
   const [recordAdvancePayment, setRecordAdvancePayment] = useState(false);
   const [advanceAmountPaid, setAdvanceAmountPaid] = useState(0);
   const [advancePaymentMethodAtBooking, setAdvancePaymentMethodAtBooking] = useState<'cash' | 'online'>('cash');
+  const [advanceOnlinePaymentApp, setAdvanceOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
+  const [onlinePaymentApp, setOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
 
   const [foundCustomers, setFoundCustomers] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -4177,6 +4196,7 @@ export default function BookingForm({
   const [idValidationError, setIdValidationError] = useState<string>('');
 
   const initialDates = resolveBookingFormDates(preSelectedDateRange, defaultDateRange, defaultDate);
+  const initialCheckInDate = initialDates.from || localDateStr();
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -4184,8 +4204,8 @@ export default function BookingForm({
     customerEmail: '',
     idType: 'aadhaar' as 'pan' | 'aadhaar' | 'passport' | 'driving',
     idNumber: '',
-    checkInDate: initialDates.from,
-    checkInTime: '',
+    checkInDate: initialCheckInDate,
+    checkInTime: defaultCheckInTimeForDate(initialCheckInDate),
     checkOutDate: initialDates.to,
     checkOutTime: '',
     adults: 1,
@@ -4304,6 +4324,7 @@ export default function BookingForm({
       ...prev,
       checkInDate: resolved.from,
       checkOutDate: resolved.to,
+      checkInTime: defaultCheckInTimeForDate(resolved.from),
     }));
   }, [preSelectedDateRange, defaultDateRange, defaultDate]);
 
@@ -4410,7 +4431,7 @@ export default function BookingForm({
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      const checkInTime = formData.checkInTime || '14:00';
+      const checkInTime = formData.checkInTime || defaultCheckInTimeForDate(formData.checkInDate);
       const checkOutTime = formData.checkOutTime || '12:00';
 
       const [inHour, inMinute] = checkInTime.split(':').map(Number);
@@ -4541,9 +4562,9 @@ export default function BookingForm({
         customerEmail: customerEmail,
         idType: idType,
         idNumber: idNumber,
-        checkInDate: formatDateForInput(fromDate) || defaultCheckIn,
+        checkInDate: formatDateForInput(fromDate) || initialCheckInDate,
         checkInTime: fromTime,
-        checkOutDate: formatDateForInput(toDate) || defaultCheckOut,
+        checkOutDate: formatDateForInput(toDate) || initialDates.to,
         checkOutTime: toTime,
         adults,
         children,
@@ -4739,6 +4760,15 @@ export default function BookingForm({
       return;
     }
 
+    if (field === 'checkInDate' && typeof value === 'string') {
+      setFormData((prev) => ({
+        ...prev,
+        checkInDate: value,
+        checkInTime: defaultCheckInTimeForDate(value),
+      }));
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [field]: value }));
 
     if (field === 'idNumber' && typeof value === 'string') {
@@ -4763,6 +4793,101 @@ export default function BookingForm({
     return isReactNativeWebView() ||
       navigator.userAgent.includes('Mobile') ||
       navigator.userAgent.includes('WebView');
+  };
+
+  const stopWebcamStream = () => {
+    const stream = webcamStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      webcamStreamRef.current = null;
+    }
+    if (webcamVideoRef.current) {
+      webcamVideoRef.current.srcObject = null;
+    }
+  };
+
+  const startWebcamStream = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('WEBCAM_NOT_SUPPORTED');
+    }
+    stopWebcamStream();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' },
+      audio: false,
+    });
+    webcamStreamRef.current = stream;
+    if (webcamVideoRef.current) {
+      webcamVideoRef.current.srcObject = stream;
+      await webcamVideoRef.current.play();
+    }
+  };
+
+  const openDesktopWebcam = async () => {
+    setWebcamOpen(true);
+    setStartingWebcam(true);
+    try {
+      await startWebcamStream();
+    } catch (error) {
+      console.error('Webcam start failed:', error);
+      setWebcamOpen(false);
+      toast({
+        title: 'Camera unavailable',
+        description: 'Please allow camera permission or use Choose from Gallery.',
+        variant: 'destructive',
+      });
+    } finally {
+      setStartingWebcam(false);
+    }
+  };
+
+  const handleWebcamCapture = async () => {
+    const video = webcamVideoRef.current;
+    const canvas = webcamCanvasRef.current;
+    if (!video || !canvas) return;
+    if (!video.videoWidth || !video.videoHeight) {
+      toast({
+        title: 'Camera not ready',
+        description: 'Please wait a moment and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setCapturingWebcam(true);
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Canvas context unavailable');
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.9)
+      );
+      if (!blob) {
+        throw new Error('Capture failed');
+      }
+
+      const file = new File([blob], `webcam-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const syntheticEvent = {
+        target: { files: [file] as unknown as FileList },
+      } as React.ChangeEvent<HTMLInputElement>;
+
+      await handleFileUpload(syntheticEvent);
+      stopWebcamStream();
+      setWebcamOpen(false);
+    } catch (error) {
+      console.error('Webcam capture failed:', error);
+      toast({
+        title: 'Capture failed',
+        description: 'Unable to capture photo. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCapturingWebcam(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4881,6 +5006,7 @@ export default function BookingForm({
 
   useEffect(() => {
     return () => {
+      stopWebcamStream();
       idImages.forEach(image => {
         if (image && image.startsWith('blob:')) {
           URL.revokeObjectURL(image);
@@ -5048,6 +5174,14 @@ export default function BookingForm({
             });
             return false;
           }
+          if (advancePaymentMethodAtBooking === 'online' && !advanceOnlinePaymentApp) {
+            toast({
+              title: 'Select UPI app',
+              description: 'Choose which online app was used for the advance payment',
+              variant: 'destructive'
+            });
+            return false;
+          }
         }
         return true;
 
@@ -5073,6 +5207,15 @@ export default function BookingForm({
             title: 'Payment Pending',
             description: 'Please complete online payment',
             variant: "destructive"
+          });
+          return false;
+        }
+
+        if (paymentMethod === 'online' && !onlinePaymentApp) {
+          toast({
+            title: 'Select UPI app',
+            description: 'Choose which online app was used for payment',
+            variant: 'destructive'
           });
           return false;
         }
@@ -5193,6 +5336,7 @@ export default function BookingForm({
       });
 
       localStorage.removeItem('currentTransaction');
+      notifyCustomersUpdated();
       onSuccess();
 
     } catch (error: any) {
@@ -5255,9 +5399,26 @@ export default function BookingForm({
           ? 'cash'
           : paymentMethod || 'cash';
 
+      const resolvedOnlinePaymentApp =
+        paymentMethod === 'online' && onlinePaymentApp
+          ? onlinePaymentApp
+          : recordAdvancePayment &&
+              advancePaid > 0 &&
+              advancePaymentMethodAtBooking === 'online' &&
+              advanceOnlinePaymentApp
+            ? advanceOnlinePaymentApp
+            : undefined;
+
       const specialRequestsWithAdvance =
         advancePaid > 0
-          ? [formData.specialRequests, `Booking advance: ₹${advancePaid.toFixed(2)}`]
+          ? [
+              formData.specialRequests,
+              `Booking advance: ₹${advancePaid.toFixed(2)}${
+                advancePaymentMethodAtBooking === 'online' && advanceOnlinePaymentApp
+                  ? ` (${formatBookingPaymentLabel('online', advanceOnlinePaymentApp)})`
+                  : ''
+              }`,
+            ]
               .filter(Boolean)
               .join('\n')
           : formData.specialRequests;
@@ -5282,9 +5443,12 @@ export default function BookingForm({
           total: totalAmount,
           payment_method: resolvedPaymentMethod,
           payment_status: finalPaymentStatus,
+          online_payment_app: resolvedOnlinePaymentApp,
           id_type: formData.idType,
+          customer_id_number: formData.idNumber,
           id_number: formData.idNumber,
           id_image: idImages.length > 0 ? idImages[0] : null,
+          id_image2: idImages.length > 1 ? idImages[1] : null,
           guests: getTotalGuests(),
           adults: Number(formData.adults) || 1,
           children: Number(formData.children) || 0,
@@ -5321,6 +5485,7 @@ export default function BookingForm({
           recordAdvancePayment && advancePaid > 0
             ? advancePaymentMethodAtBooking
             : undefined,
+        online_payment_app: resolvedOnlinePaymentApp,
         conversion_payment_method: deferPaymentToCheckout ? resolvedPaymentMethod : paymentMethod,
         conversion_payment_status: deferPaymentToCheckout ? finalPaymentStatus : paymentStatus
       };
@@ -5380,7 +5545,17 @@ export default function BookingForm({
           notifyBookingsUpdated();
         }
 
+        notifyCustomersUpdated();
+
         if (isConversion) {
+          notifyAdvanceBooking({
+            bookingId: String(advanceBookingData.id),
+            customerName: formData.customerName,
+            roomNumber: String(room.number || room.room_number || '—'),
+            checkInDate: formData.checkInDate,
+            kind: 'converted',
+          });
+
           window.dispatchEvent(new CustomEvent('advance-booking-converted', {
             detail: {
               advanceBookingId: advanceBookingData.id,
@@ -5415,18 +5590,60 @@ export default function BookingForm({
     }
   };
 
+  const applyCustomerDetails = (customer: any) => {
+    setSelectedCustomer(customer);
+
+    const images: string[] = [];
+    if (customer.id_image) images.push(customer.id_image);
+    if (customer.id_image2) images.push(customer.id_image2);
+    setIdImages((prev) => {
+      prev.forEach((img) => {
+        if (img?.startsWith('blob:')) URL.revokeObjectURL(img);
+      });
+      return images;
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      customerName: customer.name || '',
+      customerPhone: customer.phone || '',
+      customerEmail: customer.email || '',
+      idType: (customer.id_type || customer.idType || 'aadhaar') as 'pan' | 'aadhaar' | 'passport' | 'driving',
+      idNumber: customer.id_number || customer.idNumber || '',
+      address: customer.address || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      pincode: customer.pincode || '',
+      customerGstNo: customer.customer_gst_no || '',
+      purposeOfVisit: customer.purpose_of_visit || '',
+      otherExpenses: customer.other_expenses || 0,
+      expenseDescription: customer.expense_description || '',
+    }));
+    setShowCustomerSearch(false);
+    setFoundCustomers([]);
+  };
+
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawPhone = e.target.value;
     const digitsOnly = rawPhone.replace(/\D/g, '');
     const limitedPhone = digitsOnly.slice(0, 10);
 
-    setFormData({ ...formData, customerPhone: limitedPhone });
+    setFormData((prev) => ({ ...prev, customerPhone: limitedPhone }));
 
-    if (limitedPhone.length === 10) {
+    if (limitedPhone.length === 10 && userSource === 'database') {
       try {
         const customers = await searchCustomersByPhone(limitedPhone);
-        setFoundCustomers(customers || []);
-        setShowCustomerSearch(customers && customers.length > 0);
+        const list = customers || [];
+        setFoundCustomers(list);
+        if (list.length === 1) {
+          applyCustomerDetails(list[0]);
+          toast({
+            title: 'Guest Found',
+            description: `Details loaded for ${list[0].name}`,
+          });
+        } else {
+          setShowCustomerSearch(list.length > 0);
+        }
       } catch (error) {
         console.error('Error searching customers:', error);
         setFoundCustomers([]);
@@ -5440,15 +5657,7 @@ export default function BookingForm({
   };
 
   const selectCustomer = (customer: any) => {
-    setSelectedCustomer(customer);
-    setFormData({
-      ...formData,
-      customerName: customer.name,
-      customerPhone: customer.phone,
-      customerEmail: customer.email || ''
-    });
-    setShowCustomerSearch(false);
-    setFoundCustomers([]);
+    applyCustomerDetails(customer);
   };
 
   const CustomTimePicker = ({
@@ -5933,7 +6142,7 @@ export default function BookingForm({
                       value={formData.checkInTime}
                       onChange={(time) => handleChange('checkInTime', time)}
                       label="Check-in time"
-                      defaultTime="14:00"
+                      defaultTime={defaultCheckInTimeForDate(formData.checkInDate)}
                     />
                   </div>
                 </div>
@@ -5967,7 +6176,7 @@ export default function BookingForm({
                       {nights} {nights === 1 ? 'night' : 'nights'}
                     </span>
                     <span className="mx-1.5">·</span>
-                    {formatStayLabel(formData.checkInDate)} {formData.checkInTime || '14:00'}
+                    {formatStayLabel(formData.checkInDate)} {formData.checkInTime || defaultCheckInTimeForDate(formData.checkInDate)}
                     <span className="mx-1">→</span>
                     {formatStayLabel(formData.checkOutDate)} {formData.checkOutTime || '12:00'}
                   </>
@@ -6431,6 +6640,10 @@ export default function BookingForm({
                             variant="outline"
                             size="sm"
                             onClick={() => {
+                              if (!isMobileApp() && navigator.mediaDevices?.getUserMedia) {
+                                void openDesktopWebcam();
+                                return;
+                              }
                               const cameraInput = document.createElement('input');
                               cameraInput.type = 'file';
                               cameraInput.accept = 'image/*';
@@ -6482,6 +6695,63 @@ export default function BookingForm({
                           </Button>
                         </div>
                       </div>
+
+                      <Dialog
+                        open={webcamOpen}
+                        onOpenChange={(open) => {
+                          if (!open) {
+                            stopWebcamStream();
+                          }
+                          setWebcamOpen(open);
+                        }}
+                      >
+                        <DialogContent className="max-w-xl p-0 overflow-hidden">
+                          <DialogHeader className="px-4 pt-4 pb-2">
+                            <DialogTitle>Take Photo</DialogTitle>
+                            <DialogDescription>
+                              Capture ID image using your laptop webcam.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="px-4 pb-4 space-y-3">
+                            <div className="overflow-hidden rounded-lg border bg-black/90">
+                              <video
+                                ref={webcamVideoRef}
+                                autoPlay
+                                muted
+                                playsInline
+                                className="h-[280px] w-full object-cover sm:h-[340px]"
+                              />
+                            </div>
+                            <canvas ref={webcamCanvasRef} className="hidden" />
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  stopWebcamStream();
+                                  setWebcamOpen(false);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                disabled={startingWebcam || capturingWebcam}
+                                onClick={() => void handleWebcamCapture()}
+                              >
+                                {capturingWebcam ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Capturing...
+                                  </>
+                                ) : (
+                                  'Capture Photo'
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
 
                       {idImages.length > 0 && (
                         <div className="space-y-2">
@@ -6933,7 +7203,10 @@ export default function BookingForm({
                             variant={advancePaymentMethodAtBooking === 'cash' ? 'default' : 'outline'}
                             size="sm"
                             className="h-8 text-xs"
-                            onClick={() => setAdvancePaymentMethodAtBooking('cash')}
+                            onClick={() => {
+                              setAdvancePaymentMethodAtBooking('cash');
+                              setAdvanceOnlinePaymentApp('');
+                            }}
                           >
                             <Wallet className="h-4 w-4 mr-1" />
                             Cash
@@ -6952,6 +7225,14 @@ export default function BookingForm({
                       </div>
                     </div>
 
+                    {advancePaymentMethodAtBooking === 'online' && (
+                      <UpiAppSelector
+                        value={advanceOnlinePaymentApp}
+                        onChange={setAdvanceOnlinePaymentApp}
+                        className="rounded-lg border border-amber-200 bg-white p-3"
+                      />
+                    )}
+
                     {advanceAmountPaid > 0 && (
                       <div className="rounded-lg bg-white border border-amber-200 p-3 space-y-2 text-sm">
                         <div className="flex justify-between">
@@ -6959,7 +7240,14 @@ export default function BookingForm({
                           <span className="font-medium">₹{charges.total.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-green-700">
-                          <span>Advance Paid ({advancePaymentMethodAtBooking === 'cash' ? 'Cash' : 'Online'}):</span>
+                          <span>
+                            Advance Paid (
+                            {formatBookingPaymentLabel(
+                              advancePaymentMethodAtBooking,
+                              advanceOnlinePaymentApp
+                            )}
+                            ):
+                          </span>
                           <span className="font-bold">- ₹{advanceAmountPaid.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-orange-700 font-semibold border-t pt-2">
@@ -7172,7 +7460,12 @@ export default function BookingForm({
                   </div>
                   <div>
                     <span className="text-amber-700">Advance Method:</span>
-                    <span className="font-medium ml-2 capitalize">{advancePaymentMethodAtBooking}</span>
+                    <span className="font-medium ml-2">
+                      {formatBookingPaymentLabel(
+                        advancePaymentMethodAtBooking,
+                        advanceOnlinePaymentApp
+                      )}
+                    </span>
                   </div>
                   <div className="col-span-2 border-t border-amber-200 pt-2">
                     <div className="flex justify-between">
@@ -7270,6 +7563,11 @@ export default function BookingForm({
 
             {paymentMethod === 'online' && userPlan === 'pro' && (
               <div className="space-y-3">
+                <UpiAppSelector
+                  value={onlinePaymentApp}
+                  onChange={setOnlinePaymentApp}
+                  className="rounded-lg border bg-white p-3"
+                />
                 <div className="border rounded-lg p-3">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="sm:w-2/5 space-y-2">

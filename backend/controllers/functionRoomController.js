@@ -1,6 +1,7 @@
 
 const { pool } = require('../config/database');
 const PDFDocument = require('pdfkit');
+const notificationEvents = require('../services/notificationEvents');
 
 class FunctionRoomController {
   // ===========================================
@@ -918,6 +919,13 @@ class FunctionRoomController {
 
         // Commit the transaction
         await connection.commit();
+
+        void notificationEvents.notifyFunctionBookingCreated(hotelId, {
+          bookingId: result.insertId,
+          eventName: event_name,
+          customerName: customer_name,
+          eventDate: check_in_date,
+        });
 
         res.status(201).json({
           success: true,

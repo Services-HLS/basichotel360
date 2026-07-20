@@ -1166,6 +1166,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { notifyCancellationProcessed, notifyRefundPending } from '@/lib/notificationStore';
 import {
     CalendarDays,
     Search,
@@ -1556,6 +1557,16 @@ const RefundManagement = () => {
             const result = await response.json();
 
             if (result.success) {
+                const bookingId = String(selectedBooking?.booking_id ?? '');
+                const customerName = String(selectedBooking?.customer_name ?? 'Guest');
+                const roomNumber = String(selectedBooking?.room_number ?? '—');
+
+                if (processRefund) {
+                  notifyCancellationProcessed({ bookingId, customerName, roomNumber });
+                } else {
+                  notifyRefundPending({ bookingId, customerName, roomNumber });
+                }
+
                 toast({
                     title: "✅ Booking Cancelled",
                     description: result.message,

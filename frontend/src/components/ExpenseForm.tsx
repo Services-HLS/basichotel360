@@ -6,6 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import {
+  LARGE_EXPENSE_THRESHOLD,
+  notifyLargeExpense,
+} from '@/lib/notificationStore';
 
 interface ExpenseFormProps {
   open: boolean;
@@ -30,12 +34,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, onSuccess, exp
 
   useEffect(() => {
     if (expense) {
+      const dateOnly = expense.expense_date
+        ? String(expense.expense_date).slice(0, 10)
+        : new Date().toISOString().split('T')[0];
       setFormData({
         expense_name: expense.expense_name,
         description: expense.description || '',
         category: expense.category,
         amount: expense.amount.toString(),
-        expense_date: expense.expense_date,
+        expense_date: dateOnly,
         remark: expense.remark || ''
       });
     } else {
@@ -95,6 +102,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ open, onClose, onSuccess, exp
       
       const data = await response.json();
       if (data.success) {
+        const amount = parseFloat(formData.amount);
+        const expenseId = String(data.data?.id ?? expense?.id ?? Date.now());
+        if (!expense && amount >= LARGE_EXPENSE_THRESHOLD) {
+          notifyLargeExpense({
+            expenseId,
+            name: formData.expense_name,
+            amount,
+          });
+        }
+
         toast({
           title: "Success",
           description: expense ? "Expense updated successfully" : "Expense created successfully"

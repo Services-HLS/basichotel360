@@ -5,6 +5,59 @@ const hotelQueries = require('../queries/hotelQueries');
 const { normalizeHotelPlan } = require('../utils/planUtils');
 
 class Hotel {
+  static async ensureHotelCodeColumn() {
+    const [columns] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'hotels'
+         AND COLUMN_NAME = 'hotelcode'`
+    );
+
+    if (columns.length > 0) {
+      return;
+    }
+
+    await pool.execute(
+      `ALTER TABLE hotels ADD COLUMN hotelcode VARCHAR(50) NULL AFTER gst_number`
+    );
+
+    try {
+      await pool.execute(`CREATE UNIQUE INDEX idx_hotels_hotelcode ON hotels (hotelcode)`);
+    } catch (error) {
+      if (error.code !== 'ER_DUP_KEYNAME') {
+        throw error;
+      }
+    }
+  }
+
+  static async findByHotelCode(hotelCode) {
+    await this.ensureHotelCodeColumn();
+
+    const [rows] = await pool.execute(
+      `SELECT * FROM hotels WHERE hotelcode = ? LIMIT 1`,
+      [hotelCode]
+    );
+
+    return rows[0] || null;
+  }
+
+  static async updateHotelCode(id, hotelcode) {
+    await this.ensureHotelCodeColumn();
+
+    const normalizedCode =
+      hotelcode === undefined || hotelcode === null
+        ? null
+        : String(hotelcode).trim() || null;
+
+    const [result] = await pool.execute(
+      `UPDATE hotels SET hotelcode = ? WHERE id = ?`,
+      [normalizedCode, id]
+    );
+
+    return result.affectedRows > 0;
+  }
+
   // Create new hotel
   // static async create(hotelData) {
   //   const [result] = await pool.execute(
@@ -163,6 +216,10 @@ static async getSettings(id) {
   });
 
   if (!hotelUpdated) return false;
+
+  if (hotelData.hotelcode !== undefined) {
+    await this.updateHotelCode(id, hotelData.hotelcode);
+  }
 
   // If tax percentages are provided, update ALL rooms
   if (hotelData.gst_percentage !== undefined || 

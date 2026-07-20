@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, Loader2, IndianRupee } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { notifyAdvanceBooking } from '@/lib/notificationStore';
 
 interface ConvertBookingFormProps {
   open: boolean;
@@ -49,6 +50,14 @@ export default function ConvertBookingForm({
       const result = await response.json();
 
       if (result.success) {
+        notifyAdvanceBooking({
+          bookingId: String(advanceBooking.id),
+          customerName: String(advanceBooking.customer_name || 'Guest'),
+          roomNumber: String(room.number || '—'),
+          checkInDate: String(advanceBooking.from_date || ''),
+          kind: 'converted',
+        });
+
         toast({
           title: "✅ Booking Converted",
           description: `Advance booking converted. Room: ${room.number}`,

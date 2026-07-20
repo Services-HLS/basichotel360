@@ -813,7 +813,6 @@ tr.removable .remove-btn{right:4px;top:50%;transform:translateY(-50%);}
       <div class="sb-head">Hotel Info</div>
       <div class="sb-body">
         <input class="sb-input" id="sb-hotel-name" placeholder="Hotel Name" value="HOTEL_NAME_PLACEHOLDER">
-        <input class="sb-input" id="sb-hotel-tag" placeholder="Tagline / Category" value="HOTEL_TAG_PLACEHOLDER">
         <input class="sb-input" id="sb-hotel-addr" placeholder="Address line 1" value="HOTEL_ADDR_PLACEHOLDER">
         <input class="sb-input" id="sb-hotel-gstin" placeholder="GSTIN" value="HOTEL_GSTIN_PLACEHOLDER">
         <input class="sb-input" id="sb-hotel-tel" placeholder="Tel" value="HOTEL_TEL_PLACEHOLDER">
@@ -864,6 +863,7 @@ tr.removable .remove-btn{right:4px;top:50%;transform:translateY(-50%);}
   <div id="preview-wrap">
     <div id="preview-toolbar">
       <span>Live Preview — click any text to edit · hover rows to remove</span>
+      <span id="editor-status" style="margin-left:auto;font-size:11px;color:#6b7280;"></span>
     </div>
 
     <div id="invoice">
@@ -875,7 +875,6 @@ tr.removable .remove-btn{right:4px;top:50%;transform:translateY(-50%);}
             <div class="inv-accent-bar" id="inv-accent-bar"></div>
             <div class="inv-logo-wrap" id="inv-logo-wrap">
               <div class="inv-logo-name" contenteditable="true" id="f-hotel-name">HOTEL_NAME_PLACEHOLDER</div>
-              <div class="inv-logo-sub" contenteditable="true" id="f-hotel-tag">HOTEL_TAG_PLACEHOLDER</div>
               <div class="inv-logo-addr" contenteditable="true" id="f-hotel-addr">HOTEL_ADDR_PLACEHOLDER<br>Tel: HOTEL_TEL_PLACEHOLDER · GSTIN: HOTEL_GSTIN_PLACEHOLDER</div>
             </div>
             <div class="inv-header-right">
@@ -1000,16 +999,21 @@ function toggleCalcRow(cls, show) {
   });
 }
 
+function showEditorStatus(msg) {
+  var el = document.getElementById('editor-status');
+  if (!el) return;
+  el.textContent = msg;
+  setTimeout(function() { el.textContent = ''; }, 2200);
+}
+
 function syncHotelInfo() {
   var name = document.getElementById('sb-hotel-name').value;
-  var tag = document.getElementById('sb-hotel-tag').value;
   var addr = document.getElementById('sb-hotel-addr').value;
   var gstin = document.getElementById('sb-hotel-gstin').value;
   var tel = document.getElementById('sb-hotel-tel').value;
   if(name) document.getElementById('f-hotel-name').textContent = name;
-  if(tag) document.getElementById('f-hotel-tag').textContent = tag;
   if(addr) document.getElementById('f-hotel-addr').innerHTML = addr + '<br>Tel: ' + tel + ' · GSTIN: ' + gstin;
-  alert('✅ Hotel info updated!');
+  showEditorStatus('Hotel info updated');
 }
 
 function syncInvoiceMeta() {
@@ -1019,8 +1023,27 @@ function syncInvoiceMeta() {
   if(no) document.getElementById('f-inv-no').textContent = no;
   if(date) document.getElementById('f-inv-date').textContent = date;
   if(folio) document.getElementById('f-inv-folio').textContent = folio;
-  alert('✅ Invoice details updated!');
+  showEditorStatus('Invoice details updated');
 }
+
+function bindInvoiceEditorSync() {
+  var map = [
+    ['f-hotel-name', 'sb-hotel-name'],
+    ['f-inv-no', 'sb-inv-no'],
+    ['f-inv-date', 'sb-inv-date'],
+    ['f-inv-folio', 'sb-inv-folio']
+  ];
+  map.forEach(function(pair) {
+    var preview = document.getElementById(pair[0]);
+    var sidebar = document.getElementById(pair[1]);
+    if (!preview || !sidebar) return;
+    preview.addEventListener('blur', function() {
+      sidebar.value = preview.textContent.trim();
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', bindInvoiceEditorSync);
 
 function addSection() {
   var idx = document.querySelectorAll('.inv-section').length;

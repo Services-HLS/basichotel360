@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { notifyAdvanceBooking } from '@/lib/notificationStore';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
@@ -626,11 +627,16 @@ export default function AdvanceBookingForm({
             purposeOfVisit: customer.purpose_of_visit || formData.purposeOfVisit
         });
 
-        if (customer.id_image) {
-            setIdImages([customer.id_image]);
-        }
-        if (customer.id_image2) {
-            setIdImages(prev => [...prev, customer.id_image2]);
+        if (customer.id_image || customer.id_image2) {
+            const images: string[] = [];
+            if (customer.id_image) images.push(customer.id_image);
+            if (customer.id_image2) images.push(customer.id_image2);
+            setIdImages((prev) => {
+                prev.forEach((img) => {
+                    if (img?.startsWith('blob:')) URL.revokeObjectURL(img);
+                });
+                return images;
+            });
         }
 
         setShowCustomerSearch(false);
@@ -825,6 +831,16 @@ export default function AdvanceBookingForm({
                         ? `Advance booking created with default 1 night stay. Advance paid: ₹${Number(advanceAmount).toFixed(2)}`
                         : `Advance booking created successfully. Advance paid: ₹${Number(advanceAmount).toFixed(2)}`
                 });
+                const created = result.data;
+                if (created?.id) {
+                  notifyAdvanceBooking({
+                    bookingId: String(created.id),
+                    customerName: String(created.customer_name || formData.customerName || 'Guest'),
+                    roomNumber: String(created.room_number || formData.roomNumber || '—'),
+                    checkInDate: String(created.from_date || formData.checkInDate || ''),
+                    kind: 'created',
+                  });
+                }
                 onSuccess(result.data);
                 onClose();
                 localStorage.removeItem('currentAdvanceTransaction');

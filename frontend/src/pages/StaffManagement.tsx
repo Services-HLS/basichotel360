@@ -59,6 +59,10 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { hasPermission, isAdmin } from '@/lib/permissions';
+import {
+  notifyStaffPermissionsUpdated,
+  notifyStaffUserCreated,
+} from '@/lib/notificationStore';
 
 const NODE_BACKEND_URL =import.meta.env.VITE_BACKEND_URL ;
 
@@ -304,6 +308,11 @@ const StaffManagement = () => {
         if (formData.permissions.length > 0) {
           await updateUserPermissions(data.data.id, formData.permissions);
         }
+
+        notifyStaffUserCreated({
+          userId: String(data.data.id),
+          name: formData.name,
+        });
         
         toast({
           title: "Success",
@@ -432,6 +441,11 @@ const StaffManagement = () => {
       if (data.success) {
         // Update permissions
         await updateUserPermissions(editingUser.id, formData.permissions);
+
+        notifyStaffPermissionsUpdated({
+          userId: String(editingUser.id),
+          name: formData.name,
+        });
         
         toast({
           title: "Success",
@@ -576,28 +590,29 @@ const StaffManagement = () => {
                   Add Staff
                 </Button>
               </DialogTrigger>
-              <DialogContent className="flex max-h-[92dvh] w-[100vw] max-w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg sm:p-6 fixed inset-x-0 bottom-0 top-auto translate-x-0 translate-y-0 rounded-t-2xl sm:inset-auto sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]">
-                <DialogHeader>
-                  <DialogTitle>
+              <DialogContent className="flex h-[92dvh] max-h-[92dvh] w-full max-w-[100vw] flex-col gap-0 overflow-hidden border-0 p-0 shadow-2xl data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg sm:border sm:shadow-lg sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%] fixed inset-x-0 bottom-0 top-auto translate-x-0 translate-y-0 rounded-t-2xl sm:inset-auto sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]">
+                <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30 sm:hidden" aria-hidden />
+
+                <DialogHeader className="shrink-0 space-y-1 border-b px-4 py-3 pr-12 text-left sm:border-0 sm:px-6 sm:pt-6 sm:pb-0 sm:pr-6">
+                  <DialogTitle className="text-base leading-snug sm:text-lg">
                     {editingUser ? 'Edit Staff User' : 'Create New Staff User'}
                   </DialogTitle>
-                  <DialogDescription>
+                  <DialogDescription className="text-xs sm:text-sm">
                     {editingUser 
                       ? 'Update user details and permissions' 
                       : 'Create a new staff user account with specific permissions'}
                   </DialogDescription>
                 </DialogHeader>
 
-
-                
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-2 sm:px-6">
+                <div className="grid grid-cols-1 gap-4 py-3 md:grid-cols-2 md:gap-6 md:py-4">
                   {/* Left Column: Basic Info */}
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="username">Username *</Label>
                       <Input
                         id="username"
+                        className="h-11 sm:h-10"
                         value={formData.username}
                         onChange={(e) => setFormData({...formData, username: e.target.value})}
                         placeholder="Enter username"
@@ -613,6 +628,7 @@ const StaffManagement = () => {
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
+                            className="h-11 pr-10 sm:h-10"
                             value={formData.password}
                             onChange={(e) => setFormData({...formData, password: e.target.value})}
                             placeholder="Enter password"
@@ -638,6 +654,7 @@ const StaffManagement = () => {
                       <Label htmlFor="name">Full Name *</Label>
                       <Input
                         id="name"
+                        className="h-11 sm:h-10"
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="Enter full name"
@@ -650,6 +667,7 @@ const StaffManagement = () => {
                       <Input
                         id="email"
                         type="email"
+                        className="h-11 sm:h-10"
                         value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                         placeholder="Enter email"
@@ -661,6 +679,7 @@ const StaffManagement = () => {
                       <Label htmlFor="phone">Phone Number</Label>
                       <Input
                         id="phone"
+                        className="h-11 sm:h-10"
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         placeholder="Enter phone number"
@@ -673,7 +692,7 @@ const StaffManagement = () => {
                         value={formData.role}
                         onValueChange={(value) => setFormData({...formData, role: value})}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-10">
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                         <SelectContent>
@@ -704,17 +723,17 @@ const StaffManagement = () => {
                   </div>
                   
                   {/* Right Column: Permissions */}
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <Label className="mb-3 block font-medium">Permissions</Label>
-                      <div className="space-y-4 max-h-[350px] overflow-y-auto p-3 border rounded-lg">
+                      <Label className="mb-2 block font-medium sm:mb-3">Permissions</Label>
+                      <div className="space-y-3 rounded-lg border p-3 md:max-h-[min(320px,45vh)] md:overflow-y-auto sm:space-y-4">
                         {permissionCategories.map((category) => (
                           <div key={category.category} className="space-y-3">
                             <h4 className="font-medium text-sm border-b pb-1">
                               {category.category}
                             </h4>
                             {category.permissions.map((permission) => (
-                              <div key={permission.id} className="flex items-start gap-3 p-2 rounded hover:bg-accent">
+                              <div key={permission.id} className="flex items-start gap-3 rounded-md p-2.5 hover:bg-accent sm:p-2">
                                 <Switch
                                   checked={formData.permissions.includes(permission.id)}
                                   onCheckedChange={() => togglePermission(permission.id)}
@@ -762,12 +781,18 @@ const StaffManagement = () => {
                     )}
                   </div>
                 </div>
+                </div>
                 
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setOpenDialog(false)}>
+                <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:flex-row sm:justify-end sm:bg-background sm:px-6 sm:py-4 sm:pb-4">
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full sm:h-10 sm:w-auto"
+                    onClick={() => setOpenDialog(false)}
+                  >
                     Cancel
                   </Button>
                   <Button 
+                    className="h-11 w-full sm:h-10 sm:w-auto"
                     onClick={editingUser ? handleUpdateUser : handleCreateUser}
                     disabled={creating || (!editingUser && (!formData.password || formData.password.length < 8))}
                   >

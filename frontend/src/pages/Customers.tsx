@@ -1170,7 +1170,7 @@ import Layout from '@/components/Layout';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Loader2, RefreshCw, Download, Eye, FileText, FileDown, FileSpreadsheet, User, Phone, Mail, Calendar, Hash, CreditCard, Pencil, Image as ImageIcon } from 'lucide-react';
+import { Search, Loader2, RefreshCw, Download, Eye, FileText, FileDown, FileSpreadsheet, User, Phone, Mail, Calendar, Hash, CreditCard, Pencil, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import {
@@ -1188,6 +1188,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CUSTOMERS_UPDATED_EVENT } from '@/lib/bookingCheckoutUtils';
 
 // URLs
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzexlVpr_2umhzBdpoW4juzQo4rj2zB1pU3vlz6wqY78YQX3d2BFntfiV7dgLf6PvC/exec';
@@ -1212,7 +1213,7 @@ interface Customer {
   expense_description?: string;
   source?: string;
   id_image?: string;
-  // id_image2?: string;
+  id_image2?: string;
   payment_method?: string;
   payment_status?: string;
   payment_reference?: string;
@@ -1298,6 +1299,7 @@ const Customers = () => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewImageTitle, setPreviewImageTitle] = useState('');
   const [downloadingImage, setDownloadingImage] = useState(false);
+  const [deletingCustomer, setDeletingCustomer] = useState(false);
 
   // ✅ JSONP helper for Google Sheets
   const loadScript = (src: string) =>
@@ -1440,7 +1442,7 @@ const Customers = () => {
             expense_description: customer.expense_description || '',
             source: 'database',
             id_image: customer.id_image || null,
-            // id_image2: customer.id_image2 || null,
+            id_image2: customer.id_image2 || null,
             payment_method: customer.payment_method,
             payment_status: customer.payment_status,
             payment_reference: customer.payment_reference,
@@ -1530,6 +1532,63 @@ const Customers = () => {
         variant: "destructive"
       });
       return false;
+    }
+  };
+
+  const deleteCustomer = async (customer: Customer) => {
+    if (!isDatabaseUser) {
+      toast({
+        title: "Feature unavailable",
+        description: "Delete is only available for Pro Plan users",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete customer "${customer.name}" (${customer.phone})?\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingCustomer(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${NODE_BACKEND_URL}/customers/${customer.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to delete customer';
+        try {
+          const errorData = await response.json();
+          message = errorData?.message || message;
+        } catch {
+          // ignore response parse errors
+        }
+        throw new Error(message);
+      }
+
+      toast({
+        title: "Customer deleted",
+        description: `${customer.name} has been removed successfully.`,
+      });
+
+      setDetailsDialogOpen(false);
+      setSelectedCustomer(null);
+      await fetchCustomers();
+    } catch (error: any) {
+      console.error('Error deleting customer:', error);
+      toast({
+        title: "Delete failed",
+        description: error?.message || "Could not delete customer",
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingCustomer(false);
     }
   };
 
@@ -1862,6 +1921,15 @@ const Customers = () => {
     fetchCustomers();
   }, [userSource, userPlan]);
 
+  useEffect(() => {
+    const refreshGuests = () => {
+      void fetchCustomers(true);
+    };
+    window.addEventListener(CUSTOMERS_UPDATED_EVENT, refreshGuests);
+    return () => window.removeEventListener(CUSTOMERS_UPDATED_EVENT, refreshGuests);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userSource, userPlan]);
+
   const filteredCustomers = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return customers;
@@ -2118,12 +2186,13 @@ const Customers = () => {
           </CardHeader>
 
           <CardContent className="relative min-h-[min(500px,70dvh)] overflow-x-auto p-0">
-            {(loading || refreshing || downloadingAll || downloadingImage) && (
+            {(loading || refreshing || downloadingAll || downloadingImage || deletingCustomer) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-b-lg">
                 <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
                 <p className="text-muted-foreground font-medium">
                   {loading ? 'Loading customers...' :
                     refreshing ? 'Refreshing data...' :
+                      deletingCustomer ? 'Deleting customer...' :
                       downloadingImage ? 'Downloading image...' :
                         'Preparing download...'}
                 </p>
@@ -2131,7 +2200,7 @@ const Customers = () => {
             )}
 
             <AnimatePresence>
-              {!loading && !refreshing && !downloadingAll && !downloadingImage && (
+              {!loading && !refreshing && !downloadingAll && !downloadingImage && !deletingCustomer && (
                 <motion.div
                   key="data-grid"
                   initial={{ opacity: 0 }}
@@ -2436,6 +2505,19 @@ const Customers = () => {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end gap-3 pt-6 border-t">
+                  <Button
+                    variant="destructive"
+                    onClick={() => deleteCustomer(selectedCustomer)}
+                    disabled={deletingCustomer}
+                    className="flex items-center gap-2"
+                  >
+                    {deletingCustomer ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    {deletingCustomer ? 'Deleting...' : 'Delete'}
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => handleEditCustomer(selectedCustomer)}

@@ -257,6 +257,7 @@
 
 // src/lib/auth.ts
 import { getCurrentUser } from './storage';
+import { isPublicApiUrl } from './apiInterceptor';
 
 const NODE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -509,11 +510,7 @@ class AuthService {
     window.fetch = async (...args) => {
       const [url, options = {}] = args;
 
-      if (typeof url === 'string' && (
-        url.includes('/auth/login') ||
-        url.includes('/auth/refresh-token') ||
-        url.includes('/auth/forgot-password')
-      )) {
+      if (typeof url === 'string' && isPublicApiUrl(url)) {
         return originalFetch(...args);
       }
 

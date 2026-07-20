@@ -1141,6 +1141,7 @@ const hotelController = {
           igstPercentage: hotel.igst_percentage || 12.00,     // ADD THIS
           serviceChargePercentage: hotel.service_charge_percentage || 10.00,
           plan: hotel.plan || 'base',
+          hotelcode: hotel.hotelcode || '',
           qrcode_image: hotel.qrcode_image || null // Add QR code
         }
       });
@@ -1171,6 +1172,7 @@ const hotelController = {
         sgstPercentage,        // ADD THIS
         igstPercentage,        // ADD THIS
         serviceChargePercentage,
+        hotelcode,
         qrcode_image // Add QR code field
       } = req.body;
 
@@ -1210,6 +1212,7 @@ const hotelController = {
         igst_percentage: igstPercentage !== undefined ? parseFloat(igstPercentage) : undefined,        // ADD THIS
         service_charge_percentage: serviceChargePercentage !== undefined ?
           parseFloat(serviceChargePercentage) : undefined,
+        hotelcode: hotelcode !== undefined ? hotelcode : undefined,
         qrcode_image: qrcode_image || null
       });
 
@@ -1243,11 +1246,21 @@ const hotelController = {
           igstPercentage: igstPercentage !== undefined ? parseFloat(igstPercentage) : undefined,      // ADD THIS
           serviceChargePercentage: serviceChargePercentage !== undefined ?
             parseFloat(serviceChargePercentage) : undefined,
+          hotelcode: hotelcode !== undefined ? String(hotelcode).trim() : '',
           qrcode_image: qrcode_image || null
         }
       });
     } catch (error) {
       console.error('❌ Update hotel settings error:', error);
+
+      if (error.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({
+          success: false,
+          error: 'DUPLICATE_HOTEL_CODE',
+          message: 'This AIOSELL hotel code is already assigned to another hotel',
+        });
+      }
+
       res.status(500).json({
         success: false,
         error: 'SERVER_ERROR',

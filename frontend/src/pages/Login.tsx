@@ -1741,6 +1741,8 @@ import { useToast } from "@/hooks/use-toast";
 import RegisterModal from "@/components/RegisterModal";
 import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
 import AuthService from "@/lib/auth";
+import { initNotificationServices } from "@/lib/notificationInit";
+import { refreshPushRegistration } from "@/lib/pushNotificationService";
 
 const NODE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -1855,8 +1857,12 @@ useEffect(() => {
             </button>
           )}
 
-          <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-white/10 flex items-center justify-center mb-1 sm:mb-2 backdrop-blur-md border border-white/5">
-            <Hotel className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white" />
+          <div className="mb-1 sm:mb-2 h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 overflow-hidden rounded-full border border-white/20 bg-white shadow-md">
+            <img
+              src="/newlogo.png"
+              alt="Hotel 360 logo"
+              className="h-full w-full object-cover"
+            />
           </div>
 
           <div className="text-center">
@@ -2132,6 +2138,8 @@ const DatabaseLoginForm = () => {
 
       localStorage.setItem("currentUser", JSON.stringify(userData));
       localStorage.setItem("authToken", data.token);
+
+      void initNotificationServices().then(() => refreshPushRegistration());
 
       // Show welcome message based on trial status
       if (isProPlan && isPendingStatus) {

@@ -9,6 +9,7 @@ import {
   BOOKINGS_UPDATED_EVENT,
   type BookingLike,
 } from '@/lib/bookingCheckoutUtils';
+import { compareRoomNumbers } from '@/lib/utils';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Layout from '@/components/Layout';
@@ -298,6 +299,9 @@ const RoomBooking = () => {
   const calendarDragJustBookedRef = useRef(false);
   const [activeRoomType, setActiveRoomType] = useState<string>('all');
   const [bookingPage, setBookingPage] = useState(1);
+  const [bookingListFilter, setBookingListFilter] = useState<
+    'all' | 'active' | 'completed' | 'advance' | 'overdue'
+  >('all');
   const recordsPerPage = 10;
 
   // ========== MULTI-SELECT STATES ==========
@@ -1527,6 +1531,7 @@ const RoomBooking = () => {
         };
       });
 
+      roomsData.sort((a, b) => compareRoomNumbers(a.number, b.number));
       setRooms(roomsData);
       setBookings(transformedBookings);
 
@@ -1598,6 +1603,10 @@ const RoomBooking = () => {
   }, [rooms, bookings, selectedDate, availabilityClock]);
 
   useEffect(() => {
+    setBookingPage(1);
+  }, [searchTerm, bookingListFilter]);
+
+  useEffect(() => {
     if (viewMode === 'calendar') {
       setCalendarWeekStart(startOfDay(new Date()));
     }
@@ -1631,11 +1640,27 @@ const RoomBooking = () => {
     return matchesSearch && matchesType;
   });
 
-  const filteredBookings = bookings.filter(booking =>
-    booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    booking.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (booking.customerPhone || '').includes(searchTerm)
-  );
+  const bookingMatchesListFilter = (booking: Booking): boolean => {
+    if (bookingListFilter === 'all') return true;
+    if (bookingListFilter === 'advance') return !!booking.isAdvanceBooking;
+    if (bookingListFilter === 'active') return canEditOccupyingBooking(booking);
+    if (bookingListFilter === 'completed') {
+      const s = String(booking.status || '').toLowerCase();
+      return s === 'completed' || s === 'checked_out' || s === 'cancelled';
+    }
+    if (bookingListFilter === 'overdue') {
+      return isPendingCheckoutBooking(toBookingLike(booking));
+    }
+    return true;
+  };
+
+  const filteredBookings = bookings.filter((booking) => {
+    const matchesSearch =
+      booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (booking.customerPhone || '').includes(searchTerm);
+    return matchesSearch && bookingMatchesListFilter(booking);
+  });
 
   const totalPagesForBookings = Math.ceil(filteredBookings.length / recordsPerPage);
   const paginatedBookings = filteredBookings.slice(
@@ -1864,15 +1889,17 @@ const RoomBooking = () => {
     fetchFullAdvanceBooking();
   };
 
-  const handleUnblockRoom = async (room: Room, blockBooking: Booking) => {
-    if (!blockBooking) {
+  const handleClearHoldRoom = async (room: Room, holdBooking: Booking) => {
+    if (!holdBooking) {
       toast({
         title: "Error",
-        description: "No block record found for this room on selected date",
+        description: "No block/maintenance record found for this room on selected date",
         variant: "destructive"
       });
       return;
     }
+
+    const isMaintenanceHold = String(holdBooking.status || '').toLowerCase() === 'maintenance';
 
     try {
       setLoading(true);
@@ -1880,7 +1907,7 @@ const RoomBooking = () => {
       if (userSource === 'database') {
         const token = localStorage.getItem('authToken');
 
-        const response = await fetch(`${NODE_BACKEND_URL}/bookings/${blockBooking.id}/unblock`, {
+        const response = await fetch(`${NODE_BACKEND_URL}/bookings/${holdBooking.id}/unblock`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1897,35 +1924,43 @@ const RoomBooking = () => {
 
         if (result.success) {
           toast({
-            title: "✅ Room Unblocked",
-            description: `Room ${room.number} has been unblocked successfully`,
+            title: isMaintenanceHold ? '✅ Maintenance Ended' : '✅ Room Unblocked',
+            description: isMaintenanceHold
+              ? `Room ${room.number} is available again`
+              : `Room ${room.number} has been unblocked successfully`,
           });
 
           await fetchRooms();
 
           window.dispatchEvent(new CustomEvent('booking-status-changed', {
-            detail: { roomId: room.roomId, action: 'unblocked' }
+            detail: {
+              roomId: room.roomId,
+              action: isMaintenanceHold ? 'maintenance_ended' : 'unblocked',
+            }
           }));
         } else {
-          throw new Error(result.message || 'Failed to unblock room');
+          throw new Error(result.message || (isMaintenanceHold ? 'Failed to end maintenance' : 'Failed to unblock room'));
         }
       } else {
         toast({
           title: "Coming Soon",
-          description: "Unblock functionality for Google Sheets will be available soon",
+          description: "This action for Google Sheets will be available soon",
         });
       }
     } catch (error) {
-      console.error('❌ Error unblocking room:', error);
+      console.error('❌ Error clearing room hold:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to unblock room",
+        description: error.message || (isMaintenanceHold ? 'Failed to end maintenance' : 'Failed to unblock room'),
         variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
   };
+
+  /** @deprecated Use handleClearHoldRoom */
+  const handleUnblockRoom = handleClearHoldRoom;
 
   // ========== STATUS BADGE HELPERS ==========
   const getStatusBadge = (status: string, bookingType?: string) => {
@@ -2445,7 +2480,10 @@ const RoomBooking = () => {
                             const advanceBooking = getAdvanceBookingForRoom(room, selectedDate);
                             const occupyingBooking = getOccupyingBookingForRoom(room, selectedDate);
                             const showEditBooking =
-                              !isAvailableForSelectedDate && canEditOccupyingBooking(occupyingBooking);
+                              !isAvailableForSelectedDate &&
+                              !isMaintenance &&
+                              !isBlocked &&
+                              canEditOccupyingBooking(occupyingBooking);
 
                             // Determine card color based on status
                             let cardColor = 'bg-green-500';
@@ -2723,7 +2761,7 @@ const RoomBooking = () => {
                                                 size="sm"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  handleUnblockRoom(room, roomBookings.find(b =>
+                                                  handleClearHoldRoom(room, roomBookings.find(b =>
                                                     isDateBooked(selectedDate, b.checkIn, b.checkOut, b) && b.status === 'blocked'
                                                   ));
                                                 }}
@@ -2732,7 +2770,7 @@ const RoomBooking = () => {
                                                 <RefreshCw className="h-2 w-2 mr-0.5" />
                                                 Unblock
                                               </Button>
-                                              {showEditBooking && occupyingBooking && (
+                                              {occupyingBooking && userSource === 'database' && (
                                                 <Button
                                                   size="sm"
                                                   onClick={(e) => {
@@ -2742,7 +2780,36 @@ const RoomBooking = () => {
                                                   className="w-full text-[8px] sm:text-[10px] h-5 sm:h-6 bg-blue-600 hover:bg-blue-700"
                                                 >
                                                   <Pencil className="h-2 w-2 mr-0.5" />
-                                                  Edit checkout
+                                                  Edit
+                                                </Button>
+                                              )}
+                                            </>
+                                          ) : isMaintenance ? (
+                                            <>
+                                              <Button
+                                                size="sm"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleClearHoldRoom(room, roomBookings.find(b =>
+                                                    isDateBooked(selectedDate, b.checkIn, b.checkOut, b) && b.status === 'maintenance'
+                                                  ));
+                                                }}
+                                                className="w-full text-[8px] sm:text-[10px] h-5 sm:h-6 bg-green-600 hover:bg-green-700"
+                                              >
+                                                <RefreshCw className="h-2 w-2 mr-0.5" />
+                                                End Mnt
+                                              </Button>
+                                              {occupyingBooking && userSource === 'database' && (
+                                                <Button
+                                                  size="sm"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditOccupyingBooking(occupyingBooking);
+                                                  }}
+                                                  className="w-full text-[8px] sm:text-[10px] h-5 sm:h-6 bg-blue-600 hover:bg-blue-700"
+                                                >
+                                                  <Pencil className="h-2 w-2 mr-0.5" />
+                                                  Edit
                                                 </Button>
                                               )}
                                             </>
@@ -2756,7 +2823,7 @@ const RoomBooking = () => {
                                               className="w-full text-[8px] sm:text-[10px] h-5 sm:h-6 bg-blue-600 hover:bg-blue-700"
                                             >
                                               <Pencil className="h-2 w-2 mr-0.5" />
-                                              Edit checkout
+                                              Checkout
                                             </Button>
                                           ) : (
                                             <Button
@@ -2865,7 +2932,10 @@ const RoomBooking = () => {
                             const advanceBooking = getAdvanceBookingForRoom(room, selectedDate);
                             const occupyingBooking = getOccupyingBookingForRoom(room, selectedDate);
                             const showEditBooking =
-                              !isAvailableForSelectedDate && canEditOccupyingBooking(occupyingBooking);
+                              !isAvailableForSelectedDate &&
+                              !isMaintenance &&
+                              !isBlocked &&
+                              canEditOccupyingBooking(occupyingBooking);
 
                             // Determine card styling based on status
                             let statusColor = 'border-green-200';
@@ -3137,7 +3207,7 @@ const RoomBooking = () => {
                                             size="sm"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleUnblockRoom(room, roomBookings.find(b =>
+                                              handleClearHoldRoom(room, roomBookings.find(b =>
                                                 isDateBooked(selectedDate, b.checkIn, b.checkOut, b) && b.status === 'blocked'
                                               ));
                                             }}
@@ -3146,7 +3216,7 @@ const RoomBooking = () => {
                                             <RefreshCw className="h-4 w-4 mr-2" />
                                             Unblock Room
                                           </Button>
-                                          {showEditBooking && occupyingBooking && (
+                                          {occupyingBooking && userSource === 'database' && (
                                             <Button
                                               size="sm"
                                               onClick={(e) => {
@@ -3156,7 +3226,36 @@ const RoomBooking = () => {
                                               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                                             >
                                               <Pencil className="h-4 w-4 mr-2" />
-                                              Edit Checkout
+                                              Edit Dates
+                                            </Button>
+                                          )}
+                                        </>
+                                      ) : isMaintenance ? (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleClearHoldRoom(room, roomBookings.find(b =>
+                                                isDateBooked(selectedDate, b.checkIn, b.checkOut, b) && b.status === 'maintenance'
+                                              ));
+                                            }}
+                                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                          >
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            End Maintenance
+                                          </Button>
+                                          {occupyingBooking && userSource === 'database' && (
+                                            <Button
+                                              size="sm"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleEditOccupyingBooking(occupyingBooking);
+                                              }}
+                                              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                            >
+                                              <Pencil className="h-4 w-4 mr-2" />
+                                              Edit Dates
                                             </Button>
                                           )}
                                         </>
@@ -3170,7 +3269,7 @@ const RoomBooking = () => {
                                           className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                                         >
                                           <Pencil className="h-4 w-4 mr-2" />
-                                          Edit Checkout
+                                          Checkout
                                         </Button>
                                       ) : (
                                         <Button
@@ -3613,15 +3712,41 @@ const RoomBooking = () => {
             {/* Search */}
             <Card>
               <CardContent className="p-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search bookings by customer name or room number..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Search bookings by customer name or room number..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select
+                    value={bookingListFilter}
+                    onValueChange={(value) =>
+                      setBookingListFilter(
+                        value as 'all' | 'active' | 'completed' | 'advance' | 'overdue'
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <SelectValue placeholder="Filter records" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All records</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="overdue">Overdue checkout</SelectItem>
+                      <SelectItem value="advance">Advance bookings</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {bookingListFilter !== 'all' && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Showing {filteredBookings.length} of {bookings.length} bookings
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -3659,6 +3784,7 @@ const RoomBooking = () => {
                 <span className="ml-2">Loading bookings...</span>
               </div>
             ) : bookings.length > 0 ? (
+              filteredBookings.length > 0 ? (
               <div className="space-y-4">
                 <div className="overflow-auto rounded-md border bg-background">
                   <table className="w-full min-w-[420px] border-collapse text-sm">
@@ -3781,6 +3907,28 @@ const RoomBooking = () => {
                   </div>
                 )}
               </div>
+              ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Search className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No matching bookings</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {searchTerm || bookingListFilter !== 'all'
+                      ? 'Try a different search or filter.'
+                      : 'No bookings match your criteria'}
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setBookingListFilter('all');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </CardContent>
+              </Card>
+              )
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -4026,10 +4174,16 @@ const RoomBooking = () => {
             <div className="p-6 space-y-5">
               <div className="flex justify-between items-start gap-3">
                 <div>
-                  <h2 className="text-xl font-bold">Edit Checkout</h2>
+                  <h2 className="text-xl font-bold">
+                    {['maintenance', 'blocked'].includes(String(editingOccupyingBooking.status || '').toLowerCase())
+                      ? 'Edit Dates'
+                      : 'Edit Checkout'}
+                  </h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     Room {editingOccupyingBooking.roomNumber}
                     {editingOccupyingBooking.customerName ? ` · ${editingOccupyingBooking.customerName}` : ''}
+                    {String(editingOccupyingBooking.status || '').toLowerCase() === 'maintenance' ? ' · Maintenance' : ''}
+                    {String(editingOccupyingBooking.status || '').toLowerCase() === 'blocked' ? ' · Blocked' : ''}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={closeOccupyingBookingEdit}>
@@ -4173,7 +4327,9 @@ const RoomBooking = () => {
                   ) : (
                     <>
                       <CheckCircle className="h-4 w-4 mr-2" />
-                      Save checkout
+                      {['maintenance', 'blocked'].includes(String(editingOccupyingBooking.status || '').toLowerCase())
+                        ? 'Save dates'
+                        : 'Save checkout'}
                     </>
                   )}
                 </Button>

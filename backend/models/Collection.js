@@ -100,7 +100,15 @@ class Collection {
             t.payment_method as payment_mode,
             t.amount,
             t.transaction_id,
-            CONCAT('Online payment - TXN: ', COALESCE(t.transaction_id, t.id)) as remarks,
+            CONCAT(
+              'Online payment',
+              IF(t.payment_gateway IS NOT NULL AND t.payment_gateway <> '' AND t.payment_gateway <> 'upi',
+                CONCAT(' (', t.payment_gateway, ')'),
+                ''
+              ),
+              ' - TXN: ',
+              COALESCE(t.transaction_id, t.id)
+            ) as remarks,
             NULL as collected_by,
             'not_applicable' as handover_status,
             0 as handover_amount,

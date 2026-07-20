@@ -14,6 +14,7 @@ import {
 import { BasicPlanViewOnlyWrapper } from '@/components/BasicPlanViewOnlyWrapper';
 import CheckoutNotifications from '@/components/CheckoutNotifications';
 import MobileDraggableSidebar from '@/components/MobileDraggableSidebar';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,9 +38,12 @@ import {
   Building2,
   CalendarDays,
   Ban,
+  ArrowLeft,
+  Waypoints,
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '@/components/Logo';
+import { isOtaChannelManagerEnabled, openOtaChannelManager } from '@/lib/otaAppLink';
 import { useEffect } from 'react'; // Add useEffect
 // ... keep other imports ...
 import { Loader2 } from 'lucide-react'; // Add this import if not already there
@@ -54,6 +58,7 @@ const Layout = ({ children }: LayoutProps) => {
   const currentUser = getCurrentUser();
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const { badges: notificationBadges } = useNotificationCounts();
   const [isOpen, setIsOpen] = useState(false);
   const [incomeExpensesOpen, setIncomeExpensesOpen] = useState(false);
 
@@ -307,6 +312,7 @@ const Layout = ({ children }: LayoutProps) => {
     highlight?: boolean;
     disabled?: boolean;
     proOnly?: boolean;
+    externalOta?: boolean;
   };
 
   // Full sidebar for all plans; Basic plan users see Pro items greyed out
@@ -402,6 +408,13 @@ const Layout = ({ children }: LayoutProps) => {
       proOnly: true,
     },
     {
+      path: '/ota-channel-manager',
+      icon: Waypoints,
+      label: 'OTA Channel Manager',
+      requires: 'manage_hotel_settings',
+      externalOta: true,
+    },
+    {
       path: '/contact',
       icon: HelpCircle,
       label: 'Contact Support',
@@ -443,6 +456,7 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   const getNavDisabledBadge = (item: NavItem) => {
+    if (item.externalOta && !isOtaChannelManagerEnabled()) return 'Soon';
     if (isNavItemViewOnly(item)) return 'View';
     if (item.disabled) return '(Off)';
     return null;
@@ -456,6 +470,28 @@ const Layout = ({ children }: LayoutProps) => {
       });
       return;
     }
+
+    if (item.externalOta) {
+      if (!isOtaChannelManagerEnabled()) {
+        toast({
+          title: 'Coming Soon',
+          description: 'OTA Channel Manager is being rolled out and will be available shortly.',
+        });
+        return;
+      }
+
+      try {
+        openOtaChannelManager();
+      } catch (error) {
+        toast({
+          title: 'Unable to open OTA Channel Manager',
+          description: error instanceof Error ? error.message : 'Please log in again.',
+          variant: 'destructive',
+        });
+      }
+      return;
+    }
+
     handleNavigate(item.path);
   };
 
@@ -511,6 +547,16 @@ const Layout = ({ children }: LayoutProps) => {
     setIsOpen(false);
   };
 
+  const showBackButton = location.pathname !== '/dashboard';
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   const NavSectionLabel = ({ children }: { children: ReactNode }) => (
     <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/75 first:pt-1">
       {children}
@@ -523,6 +569,7 @@ const Layout = ({ children }: LayoutProps) => {
     const disabled = isNavItemDisabled(item);
     const isHighlighted = item.highlight;
     const badge = getNavDisabledBadge(item);
+    const alertCount = notificationBadges[item.path as keyof typeof notificationBadges] ?? 0;
 
     return (
       <button
@@ -557,7 +604,12 @@ const Layout = ({ children }: LayoutProps) => {
             {badge}
           </span>
         )}
-        {active && !badge && (
+        {!badge && alertCount > 0 && (
+          <span className="ml-auto flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-bold text-white">
+            {alertCount > 9 ? '9+' : alertCount}
+          </span>
+        )}
+        {active && !badge && alertCount === 0 && (
           <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-foreground" />
         )}
       </button>
@@ -615,6 +667,8 @@ const Layout = ({ children }: LayoutProps) => {
               .map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.path);
+                const alertCount =
+                  notificationBadges[item.path as keyof typeof notificationBadges] ?? 0;
                 return (
                   <button
                     key={item.path}
@@ -629,7 +683,12 @@ const Layout = ({ children }: LayoutProps) => {
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="text-sm">{item.label}</span>
-                    {active && (
+                    {alertCount > 0 && (
+                      <span className="ml-auto flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-orange-600 px-1 text-[9px] font-bold text-white">
+                        {alertCount > 9 ? '9+' : alertCount}
+                      </span>
+                    )}
+                    {active && alertCount === 0 && (
                       <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
                     )}
                   </button>
@@ -729,17 +788,17 @@ const Layout = ({ children }: LayoutProps) => {
         {filterNavItems(otherNavItems as NavItem[]).map((item) => renderNavButton(item, isMobile))}
       </nav>
 
-      <div className="shrink-0 border-t border-border/70 bg-muted/30 p-3">
-        <Button
+      <div className="shrink-0 border-t border-border/70 bg-muted/30 px-2 py-3 sm:px-3">
+        <button
+          type="button"
           onClick={handleLogout}
-          variant="outline"
-          className="h-10 w-full justify-start gap-3 rounded-xl border-border/80 bg-background/80 text-sm hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30"
+          className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left text-sm font-medium text-foreground transition-all hover:bg-destructive/5 hover:text-destructive"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/80 group-hover:bg-destructive/10">
             <LogOut className="h-4 w-4" />
           </span>
-          Sign out
-        </Button>
+          <span>Sign out</span>
+        </button>
       </div>
     </div>
   );
@@ -749,7 +808,18 @@ const Layout = ({ children }: LayoutProps) => {
       {/* Mobile Header */}
       {isMobile && (
         <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-border/60 bg-card/90 shadow-sm backdrop-blur-lg supports-[backdrop-filter]:bg-card/80">
-          <div className="flex h-full items-center gap-1.5 px-2.5">
+          <div className="flex h-full items-center gap-1 px-2">
+            {showBackButton && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 rounded-xl"
+                onClick={handleBack}
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
             <button
               type="button"
               onClick={() => setIsOpen(true)}
@@ -813,6 +883,17 @@ const Layout = ({ children }: LayoutProps) => {
       <div className={cn('flex min-h-screen min-w-0 flex-1 flex-col', isMobile && 'pt-14')}>
         <main className="flex-1 overflow-auto">
           <div className="mx-auto w-full max-w-[100vw] overflow-x-hidden p-3 sm:p-5 md:p-8">
+            {!isMobile && showBackButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2 mb-2 h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                onClick={handleBack}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+            )}
             <BasicPlanViewOnlyWrapper>{children}</BasicPlanViewOnlyWrapper>
           </div>
         </main>

@@ -22,7 +22,6 @@ const collectionRoutes = require('./routes/collectionRoutes');
 
 const permissionRoutes = require('./routes/permissionRoutes');
 const housekeepingRoutes = require('./routes/housekeepingRoutes');
-const wallet = require('./routes/walletRoutes');
 const quotations = require('./routes/quotationRoutes')
 
 
@@ -34,6 +33,10 @@ const functionRoutes = require('./routes/functionRoomRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
 const advanceBookingRoutes = require('./routes/advanceBookingRoutes');
 const refundRoutes = require('./routes/refundRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const otaChannelManagerRoutes = require('./routes/otaChannelManagerRoutes');
+const aiosellReservationRoutes = require('./routes/aiosellReservationRoutes');
+const notificationScheduler = require('./services/notificationScheduler');
 
 const { setTimezoneMiddleware } = require('./config/database');
 
@@ -135,6 +138,7 @@ app.options('*', cors(corsOptions));
 
 EmailService.testConnection().then(isConnected => {
   SchedulerService.startAutoCheckout();
+  notificationScheduler.start();
 
   if (isConnected) {
     console.log('✅ Email service ready');
@@ -171,12 +175,14 @@ app.use('/api/collections', collectionRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/salaries', salaryRoutes);
 app.use('/api/housekeeping', housekeepingRoutes);
-app.use('/api/wallet', wallet);
 app.use('/api/quotations', quotations)
 app.use('/api/whatsapp', whatsappTestRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/advance-bookings', advanceBookingRoutes);
 app.use('/api/refunds', refundRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/ota-channel-manager', otaChannelManagerRoutes);
+app.use('/api/v2/cm', aiosellReservationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -188,7 +194,8 @@ app.get('/api/health', (req, res) => {
     services: {
       email: EmailService.transporter ? 'Connected' : 'Not configured',
       scheduler: SchedulerService.start ? 'Configured' : 'Not configured', // ✅ Check if method exists
-      trial: 'Active'
+      trial: 'Active',
+      pushNotifications: require('./services/fcmService').getStatus(),
     },
     cors: {
       allowedOrigins: allowedOrigins,

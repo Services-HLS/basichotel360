@@ -1,4 +1,25 @@
 import { clearAllUserData } from './clearUserData';
+import { handleSubscriptionExpired } from './subscription';
+
+/** Public API paths that must work without login (registration, auth, etc.) */
+const PUBLIC_API_PATHS = [
+  '/auth/login',
+  '/auth/refresh-token',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-reset-token',
+  '/users/check-duplicate',
+  '/hotels/register',
+  '/hotels/register-basic',
+  '/hotels/send-pro-otp',
+  '/hotels/send-pro-otp-whatsapp',
+  '/hotels/verify-email-otp',
+  '/hotels/registry',
+  '/wallet/referral/validate',
+];
+
+export const isPublicApiUrl = (url: string): boolean =>
+  PUBLIC_API_PATHS.some((path) => url.includes(path));
 
 /**
  * Setup API interceptor to ensure hotel_id is always included
@@ -11,11 +32,8 @@ export const setupApiInterceptor = () => {
     const [url, options = {}] = args;
     const urlString = typeof url === 'string' ? url : url.toString();
     
-    // Skip for login and public endpoints
-    if (urlString.includes('/auth/login') || 
-        urlString.includes('/auth/refresh-token') ||
-        urlString.includes('/auth/forgot-password') ||
-        urlString.includes('/hotels/registry')) {
+    // Skip for login and public endpoints (registration, etc.)
+    if (isPublicApiUrl(urlString)) {
       return originalFetch(...args);
     }
 
@@ -64,22 +82,40 @@ export const setupApiInterceptor = () => {
       // Handle 403/401 responses
       if (response.status === 403 || response.status === 401) {
         const clonedResponse = response.clone();
-        
+
         try {
           const errorData = await clonedResponse.json();
-          
+          const errorCode = String(errorData.error || errorData.code || '').toLowerCase();
+          const errorMessage = String(errorData.message || '').toLowerCase();
+
+          const isSubscriptionExpired =
+            errorCode.includes('subscription_expired') ||
+            errorCode.includes('trial_expired') ||
+            errorMessage.includes('subscription expired') ||
+            errorMessage.includes('trial expired') ||
+            errorData.subscription_status === 'expired';
+
+          if (isSubscriptionExpired) {
+            handleSubscriptionExpired(errorData);
+            return response;
+          }
+
           // Check for hotel mismatch errors
-          if (errorData.error === 'INVALID_HOTEL' || 
-              errorData.code === 'WRONG_HOTEL' ||
-              errorData.message?.toLowerCase().includes('hotel') ||
-              errorData.message?.toLowerCase().includes('access denied')) {
-            
+          if (
+            errorData.error === 'INVALID_HOTEL' ||
+            errorData.code === 'WRONG_HOTEL' ||
+            errorMessage.includes('hotel') ||
+            errorMessage.includes('access denied')
+          ) {
             console.log('🚫 Hotel mismatch detected, logging out...');
             clearAllUserData();
             window.location.href = '/login';
             throw new Error('Session expired due to hotel mismatch');
           }
         } catch (e) {
+          if (e instanceof Error && e.message.includes('Session expired')) {
+            throw e;
+          }
           // Ignore JSON parse errors
         }
       }

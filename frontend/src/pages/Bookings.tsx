@@ -81,6 +81,11 @@ import {
   isUpcomingCheckoutBooking,
   notifyBookingsUpdated,
 } from '@/lib/bookingCheckoutUtils';
+import { notifyRoomNeedsCleaning, removeNotification } from '@/lib/notificationStore';
+import { notifyBookingCreated } from '@/lib/appNotifications';
+import { formatCheckInDisplay, formatCheckoutDisplay } from '@/lib/bookingCheckoutUtils';
+import { UpiAppSelector } from '@/components/UpiAppSelector';
+import { getUpiPaymentAppLabel, UpiPaymentAppId, formatBookingPaymentLabel } from '@/lib/upiPaymentApps';
 
 // URLs
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzd7E4FNEstLaGqYv-YTB8IElh648K1oiQNPzWGQlsa_3DP8-Bno7OrPnL83XZ0bK7V/exec';
@@ -131,9 +136,12 @@ interface Booking {
   refund_processed_at?: string;
   refund_id?: number;
   payment_method?: string;  // 'cash' or 'online'
+  online_payment_app?: string;
   payment_status?: string;   // 'pending', 'completed', 'failed'
   transaction_id?: string;
   special_requests?: string;
+  actual_checkout_date?: string;
+  actual_checkout_time?: string;
 }
 
 interface FunctionBooking {
@@ -283,6 +291,7 @@ const Bookings = () => {
   const [otherServiceCharges, setOtherServiceCharges] = useState(0);
   const [otherServiceDescription, setOtherServiceDescription] = useState('');
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [checkoutOnlinePaymentApp, setCheckoutOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
   const [checkoutPaymentStatus, setCheckoutPaymentStatus] = useState<'completed' | 'partial' | 'pending'>('completed');
   const [checkoutTransactionId, setCheckoutTransactionId] = useState('');
   const [checkoutHotelQRCode, setCheckoutHotelQRCode] = useState<string | null>(null);
@@ -473,6 +482,28 @@ const Bookings = () => {
     } catch {
       return value;
     }
+  };
+
+  const renderPlannedAndActualCheckout = (booking: Booking) => {
+    const actualDate = booking.actual_checkout_date
+      ? formatDateForDisplay(booking.actual_checkout_date)
+      : '';
+    const actualTime = booking.actual_checkout_time || '';
+    const hasActual = booking.status === 'completed' && !!actualDate;
+
+    return (
+      <>
+        <div className="whitespace-nowrap">
+          {booking.toDate}
+          {booking.toTime ? ` ${booking.toTime}` : ''}
+        </div>
+        {hasActual && (
+          <div className="text-[10px] text-muted-foreground whitespace-nowrap">
+            Actual: {actualDate}{actualTime ? ` ${actualTime}` : ''}
+          </div>
+        )}
+      </>
+    );
   };
 
   /** Editable only before checkout is completed */
@@ -772,6 +803,7 @@ const Bookings = () => {
           rawToTime: booking?.to_time || '',
           status: booking?.status || 'booked',
           payment_method: booking.payment_method || 'cash', // ← Make sure this line exists
+          online_payment_app: booking.online_payment_app || '',
           payment_status: booking.payment_status || 'pending',
           amount,
           service,
@@ -792,6 +824,8 @@ const Bookings = () => {
           discount_amount: parseAmount(booking.discount_amount || 0),
           discount_percentage: parseAmount(booking.discount_percentage || 0),
           special_requests: booking?.special_requests || '',
+          actual_checkout_date: booking?.actual_checkout_date || '',
+          actual_checkout_time: formatTimeForInput(booking?.actual_checkout_time) || '',
         } as Booking;
       });
 
@@ -1782,6 +1816,7 @@ const Bookings = () => {
     setOtherServiceCharges(0);
     setOtherServiceDescription('');
     setCheckoutPaymentMethod(normalizeCheckoutPaymentMethod(booking.payment_method));
+    setCheckoutOnlinePaymentApp((booking.online_payment_app as UpiPaymentAppId) || '');
     setCheckoutPaymentStatus('completed');
     setCheckoutTransactionId(booking.transaction_id || '');
     setCheckoutHotelQRCode(null);
@@ -1808,6 +1843,7 @@ const Bookings = () => {
     setCheckoutQrCodeData('');
     setIsGeneratingCheckoutQR(false);
     setIsVerifyingCheckoutPayment(false);
+    setCheckoutOnlinePaymentApp('');
   };
 
   const mapApiBookingToEditFields = (booking: Booking, api: any): Booking => ({
@@ -1830,6 +1866,8 @@ const Bookings = () => {
     igst: parseAmount(api.igst),
     total: parseAmount(api.total),
     status: api.status || booking.status,
+    actual_checkout_date: api.actual_checkout_date || booking.actual_checkout_date || '',
+    actual_checkout_time: formatTimeForInput(api.actual_checkout_time) || booking.actual_checkout_time || '',
   });
 
   const startEditInModal = async (booking: Booking) => {
@@ -2156,6 +2194,18 @@ const Bookings = () => {
     }
     if (
       checkoutPaymentMethod === 'online' &&
+      checkoutAmountToPay > 0.01 &&
+      !checkoutOnlinePaymentApp
+    ) {
+      toast({
+        title: 'Select UPI app',
+        description: 'Choose PhonePe, Google Pay, Paytm, or the app the guest used.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (
+      checkoutPaymentMethod === 'online' &&
       checkoutPaymentStatus !== 'completed' &&
       checkoutAmountToPay > 0.01
     ) {
@@ -2210,12 +2260,17 @@ const Bookings = () => {
           checkoutPaymentStatus === 'pending' ? 'pending' : 'partial';
       }
 
+      const upiAppLabel = getUpiPaymentAppLabel(checkoutOnlinePaymentApp);
+      const checkoutPaymentNote = nothingDueAtCheckout
+        ? 'no balance due (paid at booking)'
+        : `paid ₹${checkoutAmountToPay.toFixed(2)}${upiAppLabel ? ` via ${upiAppLabel}` : ''}`;
+
       const updates: any = {
         status: 'completed',
-        fromDate: formatDateForInput(checkoutBooking.rawFromDate || checkoutBooking.fromDate),
-        toDate: formatDateForInput(checkoutBooking.rawToDate || checkoutBooking.toDate),
-        fromTime: checkoutBooking.rawFromTime || checkoutBooking.fromTime || '14:00',
-        toTime: checkoutBooking.rawToTime || checkoutBooking.toTime || '12:00',
+        actual_checkout_date: formatDateForInput(new Date().toISOString()),
+        actual_checkout_time: new Date().toTimeString().slice(0, 8),
+        // Keep original stay window untouched on checkout.
+        // Only status/payment/totals should change.
         amount: newRoomAmount,
         service: totalService,
         cgst,
@@ -2224,6 +2279,8 @@ const Bookings = () => {
         gst,
         total: estimatedTotal,
         payment_method: checkoutPaymentMethod,
+        online_payment_app:
+          checkoutPaymentMethod === 'online' ? checkoutOnlinePaymentApp || null : null,
         payment_status: finalPaymentStatus,
         transaction_id: checkoutTransactionId,
         discount_percentage: discountPercentage,
@@ -2232,14 +2289,22 @@ const Bookings = () => {
         advance_amount_paid: totalPaid,
         remaining_amount: newRemaining,
         special_requests: checkoutBooking.special_requests 
-          ? `${checkoutBooking.special_requests}\nCheckout: ${nothingDueAtCheckout ? 'no balance due (paid at booking)' : `paid ₹${checkoutAmountToPay.toFixed(2)}`}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
-          : `Checkout: ${nothingDueAtCheckout ? 'no balance due (paid at booking)' : `paid ₹${checkoutAmountToPay.toFixed(2)}`}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
+          ? `${checkoutBooking.special_requests}\nCheckout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
+          : `Checkout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
       };
 
       const success = await updateBooking(checkoutBooking.bookingId, updates);
       if (success) {
         setCheckoutModalOpen(false);
         setCheckoutBooking(null);
+        if (checkoutBooking) {
+          notifyRoomNeedsCleaning({
+            bookingId: checkoutBooking.bookingId,
+            roomNumber: checkoutBooking.roomNumber || '—',
+            customerName: checkoutBooking.customerName || 'Guest',
+          });
+          removeNotification(`checkout-${checkoutBooking.bookingId}`);
+        }
         await fetchBookings(true);
         notifyBookingsUpdated();
       }
@@ -2600,6 +2665,9 @@ const Bookings = () => {
       if (updates.total !== undefined) backendUpdates.total = updates.total;
       if (updates.status !== undefined) backendUpdates.status = updates.status;
       if ((updates as any).payment_method !== undefined) backendUpdates.payment_method = (updates as any).payment_method;
+      if ((updates as any).online_payment_app !== undefined) {
+        backendUpdates.online_payment_app = (updates as any).online_payment_app;
+      }
       if ((updates as any).payment_status !== undefined) backendUpdates.payment_status = (updates as any).payment_status;
       if ((updates as any).transaction_id !== undefined) backendUpdates.transaction_id = (updates as any).transaction_id;
       if ((updates as any).discount_percentage !== undefined) backendUpdates.discount_percentage = (updates as any).discount_percentage;
@@ -2608,6 +2676,8 @@ const Bookings = () => {
       if ((updates as any).advance_amount_paid !== undefined) backendUpdates.advance_amount_paid = (updates as any).advance_amount_paid;
       if ((updates as any).remaining_amount !== undefined) backendUpdates.remaining_amount = (updates as any).remaining_amount;
       if (updates.special_requests !== undefined) backendUpdates.special_requests = updates.special_requests;
+      if ((updates as any).actual_checkout_date !== undefined) backendUpdates.actual_checkout_date = (updates as any).actual_checkout_date;
+      if ((updates as any).actual_checkout_time !== undefined) backendUpdates.actual_checkout_time = (updates as any).actual_checkout_time;
 
       if (updates.status === 'completed' || updates.status === 'cancelled') {
         backendUpdates.room_id = currentBooking?.roomId;
@@ -2724,6 +2794,9 @@ const Bookings = () => {
             if ((updates as any).payment_method !== undefined) {
               updatedBooking.payment_method = (updates as any).payment_method;
             }
+            if ((updates as any).online_payment_app !== undefined) {
+              updatedBooking.online_payment_app = (updates as any).online_payment_app;
+            }
             if ((updates as any).advance_amount_paid !== undefined) {
               updatedBooking.advance_amount_paid = (updates as any).advance_amount_paid;
             }
@@ -2741,6 +2814,15 @@ const Bookings = () => {
             title: 'Success',
             description: `Booking marked as ${updates.status}. Room is now available.`,
           });
+
+          if (updates.status === 'completed' && currentBooking) {
+            notifyRoomNeedsCleaning({
+              bookingId: String(currentBooking.bookingId ?? bookingId),
+              roomNumber: currentBooking.roomNumber || '—',
+              customerName: currentBooking.customerName || 'Guest',
+            });
+            removeNotification(`checkout-${bookingId}`);
+          }
 
           window.dispatchEvent(new CustomEvent('booking-status-changed', {
             detail: {
@@ -2976,6 +3058,23 @@ const Bookings = () => {
 
       const data = await response.json();
       if (data.success) {
+        const details = data.data?.bookingDetails;
+        const bookingId = String(data.data?.bookingId ?? '');
+        if (bookingId) {
+          notifyBookingCreated({
+            bookingId,
+            customerName: 'Guest',
+            roomNumber: String(details?.room_number ?? '—'),
+            checkInLabel: formatCheckInDisplay({
+              rawFromDate: details?.from_date,
+            }),
+            checkOutLabel: formatCheckoutDisplay({
+              rawToDate: details?.to_date,
+            }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
         toast({
           title: "✅ Success",
           description: "Quotation converted to booking successfully"
@@ -4250,7 +4349,7 @@ const Bookings = () => {
       headerName: 'Check-out',
       width: 115,
       renderCell: (params) => (
-        <span className="text-sm whitespace-nowrap">{params.row.toDate}</span>
+        <div className="text-sm">{renderPlannedAndActualCheckout(params.row)}</div>
       ),
     },
   ];
@@ -5471,9 +5570,8 @@ const Bookings = () => {
                                     )}
                                   </Button>
                                 </td>
-                                <td className="p-2 align-middle whitespace-nowrap text-xs">
-                                  {booking.toDate}
-                                  {booking.toTime ? ` ${booking.toTime}` : ''}
+                                <td className="p-2 align-middle text-xs">
+                                  {renderPlannedAndActualCheckout(booking)}
                                 </td>
                               </tr>
                             );
@@ -5547,7 +5645,15 @@ const Bookings = () => {
                                     <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
                                     <div>
                                       <div className="font-medium">{booking.fromDate}</div>
-                                      <div className="text-[10px] text-muted-foreground">to {booking.toDate} ({nights} {nights === 1 ? 'night' : 'nights'})</div>
+                                      <div className="text-[10px] text-muted-foreground">
+                                        to {booking.toDate} ({nights} {nights === 1 ? 'night' : 'nights'})
+                                      </div>
+                                      {booking.status === 'completed' && booking.actual_checkout_date && (
+                                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                                          Actual checkout: {formatDateForDisplay(booking.actual_checkout_date)}
+                                          {booking.actual_checkout_time ? ` ${booking.actual_checkout_time}` : ''}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -6848,6 +6954,22 @@ const Bookings = () => {
                     {checkoutBooking.customerPhone} · Rm {checkoutBooking.roomNumber} ·{' '}
                     {checkoutBooking.fromDate} {checkoutBooking.fromTime || '14:00'} →{' '}
                     {checkoutBooking.toDate} {checkoutBooking.toTime || '12:00'}
+                    {checkoutBooking.status === 'completed' && checkoutBooking.actual_checkout_date && (
+                      <>
+                        {' · '}
+                        Actual: {formatDateForDisplay(checkoutBooking.actual_checkout_date)}
+                        {checkoutBooking.actual_checkout_time ? ` ${checkoutBooking.actual_checkout_time}` : ''}
+                      </>
+                    )}
+                    {checkoutBooking.status === 'completed' && (
+                      <>
+                        {' · '}
+                        Paid: {formatBookingPaymentLabel(
+                          checkoutBooking.payment_method,
+                          checkoutBooking.online_payment_app
+                        )}
+                      </>
+                    )}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={closeCheckoutModal} className="h-8 w-8 p-0 rounded-full shrink-0">
@@ -7100,6 +7222,20 @@ const Bookings = () => {
 
                 {checkoutActiveTab === 'payment' && checkoutTotals && (
                   <div className="space-y-4">
+                    {checkoutBooking.status === 'completed' && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                        <p className="font-medium">Payment recorded</p>
+                        <p className="text-xs mt-1">
+                          {formatBookingPaymentLabel(
+                            checkoutBooking.payment_method,
+                            checkoutBooking.online_payment_app
+                          )}
+                          {checkoutBooking.transaction_id
+                            ? ` · Ref: ${checkoutBooking.transaction_id}`
+                            : ''}
+                        </p>
+                      </div>
+                    )}
                     {checkoutTotals.advancePaid > 0 ? (
                       <div className="border rounded-lg p-4 bg-amber-50 border-amber-200 space-y-3">
                         <h4 className="font-semibold text-sm text-amber-900 flex items-center gap-2">
@@ -7219,7 +7355,10 @@ const Bookings = () => {
                             type="button"
                             variant={checkoutPaymentMethod === 'cash' ? 'default' : 'outline'}
                             className="h-auto py-2.5 px-3 flex flex-row items-center justify-start gap-2"
-                            onClick={() => setCheckoutPaymentMethod('cash')}
+                            onClick={() => {
+                              setCheckoutPaymentMethod('cash');
+                              setCheckoutOnlinePaymentApp('');
+                            }}
                           >
                             <Wallet className="h-4 w-4 shrink-0" />
                             <div className="text-left min-w-0">
@@ -7267,6 +7406,13 @@ const Bookings = () => {
                             <span className="text-sm font-medium">Cash at reception</span>
                           </Button>
                         </div>
+                      )}
+
+                      {checkoutPaymentMethod === 'online' && isProUser && checkoutAmountToPay > 0.01 && (
+                        <UpiAppSelector
+                          value={checkoutOnlinePaymentApp}
+                          onChange={setCheckoutOnlinePaymentApp}
+                        />
                       )}
 
                       {checkoutPaymentMethod === 'online' && isProUser && (

@@ -10,11 +10,14 @@
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@android:color/white</item>
         
+        <!-- Fix for display cutouts and top spacing -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
+
         <!-- CALENDAR CUSTOMIZATION -->
         <item name="android:datePickerStyle">@style/CustomDatePicker</item>
         <item name="android:dialogTheme">@style/CustomCalendarDialog</item>
@@ -22,7 +25,7 @@
 
     <!-- Calendar Dialog Theme -->
     <style name="CustomCalendarDialog" parent="Theme.AppCompat.Light.Dialog">
-        <item name="colorAccent">#009688</item> <!-- Header and selection color -->
+        <item name="colorAccent">#009688</item>
         <item name="android:headerBackground">#00796B</item>
     </style>
 

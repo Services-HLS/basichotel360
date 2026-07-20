@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { formatCollectionPaymentLabel } from '@/lib/upiPaymentApps';
 import {
   Calendar,
   Download,
@@ -466,6 +467,10 @@ const Collections = () => {
 
       const data = await response.json();
       if (data.success) {
+        notifyBulkHandover({
+          amount: parseFloat(generalHandoverData.amount) || summary.pending_handover,
+        });
+
         toast({
           title: "Success",
           description: "Total cash handed over successfully",
@@ -523,6 +528,12 @@ const Collections = () => {
 
       const data = await response.json();
       if (data.success) {
+        notifyCollectionRecorded({
+          collectionId: data.data?.id ? String(data.data.id) : undefined,
+          amount: parseFloat(newCollectionData.amount),
+          paymentMode: newCollectionData.payment_mode,
+        });
+
         toast({
           title: "Success",
           description: "Collection recorded successfully",
@@ -688,16 +699,24 @@ const Collections = () => {
   };
 
   // Get payment mode badge
-  const getPaymentModeBadge = (mode: string) => {
+  const getPaymentModeBadge = (mode: string, remarks?: string) => {
+    const label = formatCollectionPaymentLabel(mode, remarks);
     const variants: Record<string, string> = {
       cash: 'bg-green-100 text-green-800 border-green-200',
       online: 'bg-blue-100 text-blue-800 border-blue-200',
       card: 'bg-purple-100 text-purple-800 border-purple-200',
-      upi: 'bg-orange-100 text-orange-800 border-orange-200'
+      upi: 'bg-orange-100 text-orange-800 border-orange-200',
+      phonepe: 'bg-purple-100 text-purple-800 border-purple-200',
+      googlepay: 'bg-blue-100 text-blue-800 border-blue-200',
+      paytm: 'bg-sky-100 text-sky-800 border-sky-200',
     };
+    const variantKey = label.toLowerCase().replace(/\s+/g, '');
+    const variantClass =
+      variants[variantKey] ||
+      (mode === 'cash' ? variants.cash : variants.online);
     return (
-      <Badge variant="outline" className={`${variants[mode] || 'bg-gray-100 text-gray-800'} text-xs`}>
-        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+      <Badge variant="outline" className={`${variantClass} text-xs`}>
+        {label}
       </Badge>
     );
   };
@@ -1104,7 +1123,7 @@ const Collections = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap px-2 sm:px-4">
-                                  {getPaymentModeBadge(collection.payment_mode)}
+                                  {getPaymentModeBadge(collection.payment_mode, collection.remarks)}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap px-2 sm:px-4 font-bold text-xs sm:text-sm">
                                   <div className="flex flex-col">

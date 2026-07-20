@@ -486,16 +486,14 @@ import Reports from "./pages/Reports";
 import Housekeeping from "./pages/Housekeeping";
 import MetaPixel from "./components/MetaPixel";
 import UpgradeFlow from "./components/UpgradeFlow";
-import ReferralDashboard from "./components/ReferralDashboard";
-import TransactionHistory from "./components/TransactionHistory";
-import WalletDashboard from "./components/WalletDashboard";
 import FunctionRooms from "./pages/FunctionRooms";
 import ForgotPassword from "@/components/ForgotPassword";
 import ResetPassword from "@/components/ResetPassword";
 import AdvanceBookings from "./pages/AdvanceBookings";
 import RefundManagement from './pages/RefundManagement';
-
 import { TrackingProvider } from "./context/TrackingContext";
+import { initNotificationServices } from '@/lib/notificationInit';
+import { setupApiInterceptor } from '@/lib/apiInterceptor';
 
 const queryClient = new QueryClient();
 
@@ -504,6 +502,7 @@ const App = () => {
   useEffect(() => {
     // Setup fetch interceptor for automatic token handling
     AuthService.setupFetchInterceptor();
+    setupApiInterceptor();
 
     // Check initial auth state
     const checkInitialAuth = async () => {
@@ -525,6 +524,7 @@ const App = () => {
     };
 
     checkInitialAuth();
+    void initNotificationServices();
   }, []); // Empty array = runs once on mount
 
   return (
@@ -634,24 +634,6 @@ const App = () => {
               <Route path="/settings" element={
                 <AuthProtectedRoute requiredPermission="manage_hotel_settings">
                   <Settings />
-                </AuthProtectedRoute>
-              } />
-
-              <Route path="/wallet" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <WalletDashboard />
-                </AuthProtectedRoute>
-              } />
-
-              <Route path="/wallet/transactions" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <TransactionHistory />
-                </AuthProtectedRoute>
-              } />
-
-              <Route path="/referrals" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <ReferralDashboard />
                 </AuthProtectedRoute>
               } />
 

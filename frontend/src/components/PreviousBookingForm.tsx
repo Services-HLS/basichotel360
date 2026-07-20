@@ -1615,6 +1615,8 @@ import {
 } from '@/lib/bookingCheckoutUtils';
 import { notifyBookingCreated } from '@/lib/appNotifications';
 import { isBasicDatabaseUser } from '@/lib/planUtils';
+import { UpiAppSelector } from '@/components/UpiAppSelector';
+import { type UpiPaymentAppId } from '@/lib/upiPaymentApps';
 import {
   Calendar,
   User,
@@ -1662,9 +1664,11 @@ const PreviousBookingForm = ({
   const NODE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [collectAtCheckout, setCollectAtCheckout] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
-  const [paymentStatus, setPaymentStatus] = useState<'completed' | 'pending'>('completed');
+  const [paymentStatus, setPaymentStatus] = useState<'completed' | 'pending'>('pending');
   const [transactionId, setTransactionId] = useState('');
+  const [onlinePaymentApp, setOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
   const [hotelQRCode, setHotelQRCode] = useState<string | null>(null);
   const [qrCodeData, setQrCodeData] = useState('');
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
@@ -1988,10 +1992,14 @@ const PreviousBookingForm = ({
   }, [userPlan, open]);
 
   useEffect(() => {
+    if (collectAtCheckout) {
+      setPaymentStatus('pending');
+      return;
+    }
     if (paymentMethod === 'cash') {
       setPaymentStatus('completed');
     }
-  }, [paymentMethod]);
+  }, [paymentMethod, collectAtCheckout]);
 
   // Update custom percentages when hotel settings change
   useEffect(() => {
@@ -2199,10 +2207,19 @@ const PreviousBookingForm = ({
       }
     }
 
-    if (paymentMethod === 'online' && paymentStatus !== 'completed') {
+    if (!collectAtCheckout && paymentMethod === 'online' && paymentStatus !== 'completed') {
       toast({
         title: 'Verify online payment',
         description: 'Scan the QR code and click "I have made the payment" before submitting.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    if (!collectAtCheckout && paymentMethod === 'online' && !onlinePaymentApp) {
+      toast({
+        title: 'Select UPI app',
+        description: 'Choose which online app was used for payment',
         variant: 'destructive',
       });
       return false;
@@ -2268,9 +2285,13 @@ const PreviousBookingForm = ({
         // Status and booking details
         status: 'booked',
         guests: formData.guests,
-        payment_method: paymentMethod,
-        payment_status: paymentStatus,
-        transaction_id: transactionId || null,
+        payment_method: collectAtCheckout ? 'cash' : paymentMethod,
+        payment_status: collectAtCheckout ? 'pending' : paymentStatus,
+        transaction_id: collectAtCheckout ? null : (transactionId || null),
+        online_payment_app:
+          !collectAtCheckout && paymentMethod === 'online' ? onlinePaymentApp || null : null,
+        advance_amount_paid: collectAtCheckout ? 0 : charges.total,
+        remaining_amount: collectAtCheckout ? charges.total : 0,
 
         // Customer ID details
         id_type: formData.idType,
@@ -3290,19 +3311,67 @@ const PreviousBookingForm = ({
           </Collapsible>
 
           {/* Payment Method */}
-          <div className="border rounded-xl p-3 sm:p-6 bg-card shadow-sm">
-            <h3 className="font-semibold text-sm sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
+          <div className="border rounded-xl p-3 sm:p-6 bg-card shadow-sm space-y-4">
+            <h3 className="font-semibold text-sm sm:text-lg flex items-center gap-2">
               <CreditCard className="h-4 w-4 sm:h-5 sm:w-5" />
-              Payment Method
+              Payment
             </h3>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={collectAtCheckout ? 'default' : 'outline'}
+                className="h-auto py-3 flex flex-col items-start gap-1 text-left"
+                onClick={() => {
+                  setCollectAtCheckout(true);
+                  setPaymentStatus('pending');
+                  setPaymentMethod('cash');
+                  setOnlinePaymentApp('');
+                  setTransactionId('');
+                }}
+              >
+                <span className="text-sm font-semibold">Collect at checkout</span>
+                <span className="text-[11px] opacity-80 font-normal">
+                  Guest pays full amount when checking out
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant={!collectAtCheckout ? 'default' : 'outline'}
+                className="h-auto py-3 flex flex-col items-start gap-1 text-left"
+                onClick={() => {
+                  setCollectAtCheckout(false);
+                  setPaymentStatus('completed');
+                }}
+              >
+                <span className="text-sm font-semibold">Already paid now</span>
+                <span className="text-[11px] opacity-80 font-normal">
+                  Record cash/online payment already received
+                </span>
+              </Button>
+            </div>
+
+            {collectAtCheckout ? (
+              <Alert className="bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800 text-sm">
+                  Booking will be created with <strong>balance due ₹{charges.total.toFixed(2)}</strong>.
+                  Collect this amount in the <strong>Checkout</strong> tab when the guest leaves.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
             {userPlan === 'pro' ? (
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <Button
                   type="button"
                   variant={paymentMethod === 'cash' ? 'default' : 'outline'}
                   className="h-auto py-2.5 sm:py-3 flex flex-col sm:flex-row items-center sm:items-start justify-center sm:justify-start gap-1.5 sm:gap-2"
-                  onClick={() => setPaymentMethod('cash')}
+                  onClick={() => {
+                    setPaymentMethod('cash');
+                    setPaymentStatus('completed');
+                    setOnlinePaymentApp('');
+                  }}
                 >
                   <Wallet className="h-4 w-4 shrink-0" />
                   <div className="text-center sm:text-left">
@@ -3344,7 +3413,10 @@ const PreviousBookingForm = ({
                   type="button"
                   variant="default"
                   className="w-full h-auto py-3 flex items-center justify-center gap-2"
-                  onClick={() => setPaymentMethod('cash')}
+                  onClick={() => {
+                    setPaymentMethod('cash');
+                    setPaymentStatus('completed');
+                  }}
                 >
                   <Wallet className="h-4 w-4 shrink-0" />
                   <span className="text-sm font-medium">Cash at reception</span>
@@ -3354,6 +3426,10 @@ const PreviousBookingForm = ({
 
             {paymentMethod === 'online' && userPlan === 'pro' && (
               <div className="mt-3 sm:mt-4 border rounded-xl p-3 sm:p-4 space-y-3">
+                <UpiAppSelector
+                  value={onlinePaymentApp}
+                  onChange={setOnlinePaymentApp}
+                />
                 <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
                   <div className="flex flex-col items-center shrink-0">
                     <h4 className="font-semibold text-xs sm:text-sm mb-2">Scan QR</h4>
@@ -3435,6 +3511,8 @@ const PreviousBookingForm = ({
                 <span className="font-bold text-blue-700">₹{charges.total.toFixed(2)}</span>
               </div>
             )}
+              </>
+            )}
           </div>
 
           {/* Summary */}
@@ -3468,7 +3546,11 @@ const PreviousBookingForm = ({
               </div>
               <div>
                 <p className="text-muted-foreground">Payment</p>
-                <p className="font-medium capitalize">{paymentMethod} · {paymentStatus}</p>
+                <p className="font-medium">
+                  {collectAtCheckout
+                    ? `Pay at checkout · ₹${charges.total.toFixed(2)} due`
+                    : `${paymentMethod} · ${paymentStatus}`}
+                </p>
               </div>
               <div>
                 <p className="text-muted-foreground">Tax</p>
@@ -3479,7 +3561,9 @@ const PreviousBookingForm = ({
                 </p>
               </div>
               <div className="col-span-2 border-t pt-2 mt-1">
-                <p className="text-muted-foreground">Total Amount</p>
+                <p className="text-muted-foreground">
+                  {collectAtCheckout ? 'Amount due at checkout' : 'Total Amount'}
+                </p>
                 <p className="font-bold text-lg sm:text-2xl text-green-600">₹{charges.total.toFixed(2)}</p>
               </div>
             </div>

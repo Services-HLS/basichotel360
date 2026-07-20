@@ -58,6 +58,7 @@ import {
   createFunctionBooking,
   checkFunctionRoomAvailability
 } from '@/lib/functionRoomApi';
+import { notifyFunctionEvent } from '@/lib/notificationStore';
 
 import {
   getAvailableRooms,
@@ -2232,6 +2233,31 @@ export default function FunctionRooms() {
       const result = await createFunctionBooking(functionBookingData);
 
       if (result && result.success) {
+        const bookingId = String(
+          result.data?.id ??
+            result.data?.booking_id ??
+            result.data?.booking_reference ??
+            ''
+        ).trim();
+
+        if (bookingId) {
+          notifyFunctionEvent({
+            bookingId,
+            hallName: String(
+              selectedRoom?.name ||
+                result.data?.room_name ||
+                bookingForm.event_name ||
+                'Function hall'
+            ),
+            eventDate: String(
+              result.data?.check_in_date || bookingForm.check_in_date || ''
+            ),
+            customerName: bookingForm.customer_name,
+          });
+        } else {
+          console.warn('Function booking created without id — bell notification skipped');
+        }
+
         toast({
           title: '✅ Booking Created Successfully',
           description: advancePaid > 0

@@ -15,6 +15,7 @@ const WhatsAppService = require('../services/whatsappService');
 // Import Email Service
 const EmailService = require('../services/emailService');
 const SchedulerService = require('../services/schedulerService');
+const notificationEvents = require('../services/notificationEvents');
 const { isBasicHotelPlan } = require('../utils/planUtils');
 const { getPaymentBreakdown, parseCheckoutPaid } = require('../utils/paymentBreakdown');
 const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
@@ -78,6 +79,7 @@ async function recordBookingAdvancePayment({
   roomId,
   fromDate,
   toDate,
+  onlinePaymentApp,
 }) {
   const advance = parseFloat(advancePaid) || 0;
 
@@ -85,6 +87,9 @@ async function recordBookingAdvancePayment({
     if (ONLINE_PAYMENT_MODES.has(advancePaymentMethod)) {
       const txnId =
         transactionId || `TXN-ADV-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const appLabel = onlinePaymentApp
+        ? String(onlinePaymentApp).replace(/_/g, ' ')
+        : null;
       await Transaction.create({
         hotel_id: hotelId,
         booking_id: bookingId,
@@ -93,18 +98,21 @@ async function recordBookingAdvancePayment({
         amount: advance,
         currency: 'INR',
         payment_method: 'online',
-        payment_gateway: 'upi',
+        payment_gateway: appLabel || 'upi',
         status: 'success',
-        status_message: 'Advance payment received at booking',
+        status_message: appLabel
+          ? `Advance payment via ${appLabel}`
+          : 'Advance payment received at booking',
         metadata: {
           type: 'booking_advance',
           room_id: roomId,
           from_date: fromDate,
           to_date: toDate,
           customer_name: customerName,
+          online_payment_app: onlinePaymentApp || null,
         },
       });
-      console.log(`✅ Online advance transaction created: ₹${advance}`);
+      console.log(`✅ Online advance transaction created: ₹${advance}${appLabel ? ` (${appLabel})` : ''}`);
       return;
     }
 
@@ -116,6 +124,69 @@ async function recordBookingAdvancePayment({
   if (paymentMethod === 'cash') {
     await Collection.createFromCashBooking(bookingId, hotelId, userId);
     console.log('✅ Auto-created collection for cash booking');
+  }
+}
+
+async function recordCheckoutPayment({
+  bookingId,
+  hotelId,
+  userId,
+  customerId,
+  customerName,
+  paymentMethod,
+  checkoutAmount,
+  transactionId,
+  onlinePaymentApp,
+}) {
+  const amount = parseFloat(checkoutAmount) || 0;
+  if (amount <= 0) return;
+
+  const mode = String(paymentMethod || 'cash').toLowerCase();
+
+  if (mode === 'cash') {
+    await Collection.createFromCheckoutPayment(
+      bookingId,
+      hotelId,
+      userId,
+      amount,
+      customerName
+    );
+    console.log(`✅ Checkout cash collection created: ₹${amount}`);
+    return;
+  }
+
+  if (ONLINE_PAYMENT_MODES.has(mode)) {
+    const txnId =
+      transactionId || `TXN-CHK-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const appLabel = onlinePaymentApp
+      ? String(onlinePaymentApp).replace(/_/g, ' ')
+      : null;
+
+    await Transaction.create({
+      hotel_id: hotelId,
+      booking_id: bookingId,
+      customer_id: customerId || null,
+      transaction_id: txnId,
+      amount,
+      currency: 'INR',
+      payment_method: 'online',
+      payment_gateway: appLabel || 'upi',
+      status: 'success',
+      status_message: appLabel
+        ? `Checkout payment via ${appLabel}`
+        : 'Checkout payment received',
+      metadata: {
+        type: 'checkout_payment',
+        online_payment_app: onlinePaymentApp || null,
+        customer_name: customerName,
+      },
+    });
+
+    if (!transactionId) {
+      await Booking.update(bookingId, hotelId, { transaction_id: txnId });
+    }
+
+    console.log(`✅ Checkout online transaction created: ₹${amount}${appLabel ? ` (${appLabel})` : ''}`);
   }
 }
 
@@ -170,6 +241,7 @@ const bookingController = {
       } = req.body;
 
       const hotelId = req.user.hotel_id;
+      const guestIdNumber = customer_id_number || req.body.id_number || '';
       let finalCustomerId = customer_id;
       let generatedTransactionId = transaction_id;
       let isNewCustomer = false;
@@ -246,7 +318,7 @@ const bookingController = {
               name: customer_name,
               phone: customer_phone,
               email: customer_email || existingCustomer.email,
-              id_number: customer_id_number || existingCustomer.id_number,
+              id_number: guestIdNumber || existingCustomer.id_number,
               id_type: id_type || 'aadhaar',
               id_image: id_image || existingCustomer.id_image,
               id_image2: id_image2 || existingCustomer.id_image2,
@@ -267,7 +339,7 @@ const bookingController = {
               name: customer_name,
               phone: customer_phone,
               email: customer_email || '',
-              id_number: customer_id_number || '',
+              id_number: guestIdNumber || '',
               id_type: id_type || 'aadhaar',
               id_image: id_image || null,
               id_image2: id_image2 || null,
@@ -384,6 +456,16 @@ const bookingController = {
 
       console.log('✅ Booking created successfully:', { bookingId });
 
+      if (req.body.online_payment_app) {
+        try {
+          await Booking.update(bookingId, hotelId, {
+            online_payment_app: req.body.online_payment_app,
+          });
+        } catch (appErr) {
+          console.warn('⚠️ Failed to save online_payment_app on booking:', appErr.message);
+        }
+      }
+
       // ===========================================
       // 5. UPDATE ROOM STATUS
       // ===========================================
@@ -462,6 +544,7 @@ const bookingController = {
             roomId: room_id,
             fromDate: from_date,
             toDate: to_date,
+            onlinePaymentApp: req.body.online_payment_app || null,
           });
         } catch (collectionError) {
           console.error('❌ Failed to record booking payment:', collectionError);
@@ -745,6 +828,14 @@ const bookingController = {
         };
       }
 
+      if ((status || 'booked') === 'booked') {
+        void notificationEvents.notifyNewBooking(hotelId, {
+          bookingId,
+          customerName: customer_name,
+          roomNumber: room.room_number,
+        });
+      }
+
       res.status(201).json({
         success: true,
         message: isNewCustomer ? 'New customer and booking created successfully' : 'Booking created successfully',
@@ -990,6 +1081,16 @@ const bookingController = {
         }
       }
 
+      // Capture actual checkout timestamp when completing booking.
+      if (bookingData.status === 'completed' && currentBooking.status !== 'completed') {
+        if (!bookingData.actual_checkout_date) {
+          bookingData.actual_checkout_date = new Date().toISOString().slice(0, 10);
+        }
+        if (!bookingData.actual_checkout_time) {
+          bookingData.actual_checkout_time = new Date().toTimeString().slice(0, 8);
+        }
+      }
+
       // Update booking
       console.log('📝 Attempting to update booking with data:', bookingData);
       const updated = await Booking.update(id, hotelId, bookingData);
@@ -1014,46 +1115,53 @@ const bookingController = {
         }
       }
 
-      // Record cash collected at checkout (balance after advance at booking)
+      // Record payment collected at checkout (cash → collections, online → transactions)
       if (
         bookingData.status === 'completed' &&
         currentBooking.status !== 'completed'
       ) {
         const paymentMethod = bookingData.payment_method || currentBooking.payment_method;
-        if (paymentMethod === 'cash') {
-          const prevPaid = parseFloat(currentBooking.advance_amount_paid) || 0;
-          const newPaid = parseFloat(
+        const prevPaid = parseFloat(currentBooking.advance_amount_paid) || 0;
+        const newPaid =
+          parseFloat(
             bookingData.advance_amount_paid !== undefined
               ? bookingData.advance_amount_paid
               : currentBooking.advance_amount_paid
           ) || 0;
 
-          let checkoutAmount = parseCheckoutPaid(bookingData.special_requests || '');
-          if (checkoutAmount <= 0) {
-            checkoutAmount = Math.max(0, Math.round((newPaid - prevPaid) * 100) / 100);
-          }
+        let checkoutAmount = parseCheckoutPaid(bookingData.special_requests || '');
+        if (checkoutAmount <= 0) {
+          checkoutAmount = Math.max(0, Math.round((newPaid - prevPaid) * 100) / 100);
+        }
 
-          if (checkoutAmount > 0) {
-            try {
-              const [customerRows] = await pool.execute(
-                `SELECT c.name FROM bookings b
-                 LEFT JOIN customers c ON b.customer_id = c.id
-                 WHERE b.id = ? AND b.hotel_id = ?`,
-                [id, hotelId]
-              );
-              const customerName = customerRows[0]?.name || 'Guest';
-              await Collection.createFromCheckoutPayment(
-                id,
-                hotelId,
-                req.user.userId,
-                checkoutAmount,
-                customerName
-              );
-              console.log(`✅ Checkout collection created: ₹${checkoutAmount}`);
-            } catch (collectionError) {
-              console.error('❌ Failed to create checkout collection:', collectionError);
-            }
+        if (checkoutAmount > 0) {
+          try {
+            const [customerRows] = await pool.execute(
+              `SELECT c.name FROM bookings b
+               LEFT JOIN customers c ON b.customer_id = c.id
+               WHERE b.id = ? AND b.hotel_id = ?`,
+              [id, hotelId]
+            );
+            const customerName = customerRows[0]?.name || 'Guest';
+
+            await recordCheckoutPayment({
+              bookingId: id,
+              hotelId,
+              userId: req.user.userId,
+              customerId: currentBooking.customer_id,
+              customerName,
+              paymentMethod,
+              checkoutAmount,
+              transactionId:
+                bookingData.transaction_id || currentBooking.transaction_id,
+              onlinePaymentApp:
+                bookingData.online_payment_app || currentBooking.online_payment_app,
+            });
+          } catch (collectionError) {
+            console.error('❌ Failed to record checkout payment:', collectionError);
           }
+        } else {
+          console.log('⏭️ No checkout payment to record (balance already paid at booking)');
         }
       } else if (bookingData.status === 'booked' && currentBooking.status !== 'booked') {
         const roomId = bookingData.room_id || currentBooking.room_id;
@@ -2782,7 +2890,7 @@ const bookingController = {
   <div class="inv-header">
     <div>
       <div class="inv-logo-name">${escapeHtml(hotelDetails.name || 'Hotel Management')}</div>
-      <div class="inv-logo-sub">Luxury Collection</div>
+      <!-- <div class="inv-logo-sub">Luxury Collection</div> -->
       <div class="inv-logo-addr">${escapeHtml(hotelDetails.address || 'Address not specified')}<br>Tel: ${escapeHtml(hotelDetails.hotel_phone || hotelDetails.phone || 'N/A')} · GSTIN: ${escapeHtml(hotelDetails.gst_number || 'N/A')}</div>
     </div>
     <div class="inv-header-right">
@@ -3223,10 +3331,14 @@ const bookingController = {
         invoice_number,
         booking_date,
         check_in_date,
-        check_out_date
+        check_out_date,
+        advance_amount_paid,
+        remaining_amount,
+        online_payment_app,
       } = req.body;
 
       const hotelId = req.user.hotel_id;
+      const guestIdNumber = customer_id_number || req.body.id_number || '';
       let finalCustomerId = customer_id;
       let isNewCustomer = false;
 
@@ -3272,7 +3384,7 @@ const bookingController = {
                 name: customer_name,
                 phone: customer_phone,
                 email: customer_email || existingCustomer.email,
-                id_number: customer_id_number || existingCustomer.id_number,
+                id_number: guestIdNumber || existingCustomer.id_number,
                 id_type: id_type || 'aadhaar',
                 id_image: id_image || existingCustomer.id_image,
                 id_image2: id_image2 || existingCustomer.id_image2,
@@ -3292,7 +3404,7 @@ const bookingController = {
               name: customer_name,
               phone: customer_phone,
               email: customer_email || '',
-              id_number: customer_id_number || '',
+              id_number: guestIdNumber || '',
               id_type: id_type || 'aadhaar',
               id_image: id_image || null,
               id_image2: id_image2 || null,
@@ -3401,6 +3513,16 @@ const bookingController = {
         otherExpensesValue;
 
       const finalTotal = parseFloat(total || calculatedTotal);
+      const advancePaid = parseFloat(
+        advance_amount_paid !== undefined && advance_amount_paid !== null
+          ? advance_amount_paid
+          : (String(payment_status || '').toLowerCase() === 'completed' ? finalTotal : 0)
+      );
+      const remainingDue = parseFloat(
+        remaining_amount !== undefined && remaining_amount !== null
+          ? remaining_amount
+          : Math.max(0, finalTotal - advancePaid)
+      );
 
       const bookingData = {
         hotel_id: hotelId,
@@ -3425,6 +3547,9 @@ const bookingController = {
         payment_method: payment_method || 'cash',
         payment_status: payment_status || 'completed',
         transaction_id: transaction_id || null,
+        online_payment_app: online_payment_app || null,
+        advance_amount_paid: advancePaid,
+        remaining_amount: remainingDue,
         referral_by: referral_by || '',
         referral_amount: parseFloat(referral_amount || 0),
         booking_date: actualBookingDate,
@@ -3451,18 +3576,31 @@ const bookingController = {
 
       console.log('✅ Past booking created successfully:', { bookingId });
 
-      // ===========================================
-      // 6. UPDATE ROOM STATUS (Only if dates are current/future)
-      // ===========================================
-      if (status === 'booked' && fromDate >= today) {
-        await Room.updateStatus(room_id, hotelId, 'booked');
-        console.log('✅ Room status updated to booked');
+      if (online_payment_app) {
+        try {
+          await Booking.update(bookingId, hotelId, {
+            online_payment_app,
+          });
+        } catch (appErr) {
+          console.warn('⚠️ Failed to save online_payment_app on past booking:', appErr.message);
+        }
       }
 
       // ===========================================
-      // 7. CREATE COLLECTION FOR PAST BOOKING
+      // 6. UPDATE ROOM STATUS (current/future stay, or still in house)
       // ===========================================
-      if (payment_method === 'cash' && status === 'booked') {
+      if (status === 'booked' && toDate >= today) {
+        await Room.updateStatus(room_id, hotelId, 'booked');
+        console.log('✅ Room status updated to booked (stay still active or future)');
+      }
+
+      // ===========================================
+      // 7. CREATE COLLECTION ONLY IF ALREADY PAID
+      // ===========================================
+      const isAlreadyPaid =
+        String(payment_status || '').toLowerCase() === 'completed' && remainingDue <= 0;
+
+      if (payment_method === 'cash' && status === 'booked' && isAlreadyPaid) {
         try {
           await Collection.createFromCashBooking(bookingId, hotelId, req.user.userId);
           console.log('✅ Auto-created collection for past cash booking');
@@ -3487,6 +3625,8 @@ const bookingController = {
           booking_date: actualBookingDate,
           status: status,
           total: finalTotal,
+          advance_amount_paid: advancePaid,
+          remaining_amount: remainingDue,
           payment_method: payment_method,
           payment_status: payment_status,
           invoice_number: finalInvoiceNumber,
@@ -4317,14 +4457,16 @@ const bookingController = {
         });
       }
 
-      // Check if it's actually a blocked room
-      if (currentBooking.status !== 'blocked') {
+      // Allow clearing both blocked and maintenance holds
+      if (!['blocked', 'maintenance'].includes(currentBooking.status)) {
         return res.status(400).json({
           success: false,
-          error: 'NOT_BLOCKED',
-          message: 'This booking is not a blocked room'
+          error: 'NOT_CLEARABLE',
+          message: 'This booking is not a blocked or maintenance room'
         });
       }
+
+      const wasMaintenance = currentBooking.status === 'maintenance';
 
       // Update booking status to 'available'
       const updated = await Booking.update(id, hotelId, {
@@ -4335,7 +4477,7 @@ const bookingController = {
         return res.status(404).json({
           success: false,
           error: 'UPDATE_FAILED',
-          message: 'Failed to unblock room'
+          message: wasMaintenance ? 'Failed to end maintenance' : 'Failed to unblock room'
         });
       }
 
@@ -4354,11 +4496,11 @@ const bookingController = {
         }
       }
 
-      console.log('✅ Room unblocked successfully:', { bookingId: id });
+      console.log(`✅ Room ${wasMaintenance ? 'maintenance ended' : 'unblocked'} successfully:`, { bookingId: id });
 
       res.json({
         success: true,
-        message: 'Room unblocked successfully'
+        message: wasMaintenance ? 'Maintenance ended successfully' : 'Room unblocked successfully'
       });
 
     } catch (error) {
@@ -4465,7 +4607,7 @@ const bookingController = {
   //               name: customer_name,
   //               phone: customer_phone,
   //               email: customer_email || existingCustomer.email,
-  //               id_number: customer_id_number || existingCustomer.id_number,
+  //               id_number: guestIdNumber || existingCustomer.id_number,
   //               id_type: id_type || existingCustomer.id_type || 'aadhaar',
   //               address: address || existingCustomer.address,
   //               city: city || existingCustomer.city,
@@ -4481,7 +4623,7 @@ const bookingController = {
   //               name: customer_name,
   //               phone: customer_phone,
   //               email: customer_email || '',
-  //               id_number: customer_id_number || '',
+  //               id_number: guestIdNumber || '',
   //               id_type: id_type || 'aadhaar',
   //               address: address || '',
   //               city: city || '',
@@ -4785,6 +4927,7 @@ const bookingController = {
                   roomId: bookingData.room_id,
                   fromDate: bookingData.from_date,
                   toDate: bookingData.to_date,
+                  onlinePaymentApp: bookingData.online_payment_app || null,
                 });
               } catch (collectionError) {
                 console.error('Collection creation error:', collectionError);
@@ -4835,6 +4978,8 @@ const bookingController = {
             results.push({
               bookingId,
               room_id: bookingData.room_id,
+              room_number: bookingData.room_number,
+              customer_name: bookingData.customer_name,
               customer_id: finalCustomerId,
               advance_booking_id: bookingData.advance_booking_id,
               success: true
@@ -4855,8 +5000,15 @@ const bookingController = {
 
         // If this was a group conversion, dispatch an event
         if (isGroupConversion && results.length > 0) {
-          // You can add socket.io or event emitter here if needed
           console.log(`🎉 Group conversion completed: ${results.length} rooms converted`);
+        }
+
+        for (const created of results) {
+          void notificationEvents.notifyNewBooking(hotelId, {
+            bookingId: created.bookingId,
+            customerName: created.customer_name,
+            roomNumber: created.room_number,
+          });
         }
 
         res.json({
@@ -5339,7 +5491,7 @@ const bookingController = {
 
       // Prepare data for template
       const hotelName = escapeHtml(hotelDetails.name || 'Hotel Management');
-      const hotelTag = 'Luxury Collection';
+      // const hotelTag = 'Luxury Collection';
       const hotelAddr = escapeHtml(hotelDetails.address || 'Address not specified');
       const hotelGstin = escapeHtml(hotelDetails.gst_number || 'N/A');
       const hotelTel = escapeHtml(hotelDetails.hotel_phone || hotelDetails.phone || 'N/A');
@@ -5501,7 +5653,7 @@ const bookingController = {
 
       // Replace placeholders
       html = html.split('HOTEL_NAME_PLACEHOLDER').join(hotelName);
-      html = html.split('HOTEL_TAG_PLACEHOLDER').join(hotelTag);
+      html = html.split('HOTEL_TAG_PLACEHOLDER').join('');
       html = html.split('HOTEL_ADDR_PLACEHOLDER').join(hotelAddr);
       html = html.split('HOTEL_GSTIN_PLACEHOLDER').join(hotelGstin);
       html = html.split('HOTEL_TEL_PLACEHOLDER').join(hotelTel);
@@ -6001,7 +6153,7 @@ const bookingController = {
 
       // Prepare data for template
       const hotelName = escapeHtml(hotelDetails.name || 'Hotel Management');
-      const hotelTag = 'LUXURY COLLECTION';
+      // const hotelTag = 'LUXURY COLLECTION';
       const hotelAddr = escapeHtml(hotelDetails.address || 'Address not specified');
       const hotelGstin = escapeHtml(hotelDetails.gst_number || 'N/A');
       const hotelTel = escapeHtml(hotelDetails.hotel_phone || hotelDetails.phone || 'N/A');
@@ -6055,7 +6207,7 @@ const bookingController = {
 
       // Replace placeholders
       html = html.split('HOTEL_NAME_PLACEHOLDER').join(hotelName);
-      html = html.split('HOTEL_TAG_PLACEHOLDER').join(hotelTag);
+      html = html.split('HOTEL_TAG_PLACEHOLDER').join('');
       html = html.split('HOTEL_ADDR_PLACEHOLDER').join(hotelAddr);
       html = html.split('HOTEL_GSTIN_PLACEHOLDER').join(hotelGstin);
       html = html.split('HOTEL_TEL_PLACEHOLDER').join(hotelTel);

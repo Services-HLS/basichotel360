@@ -22,6 +22,8 @@ import {
   Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { notifyBookingCreated } from '@/lib/appNotifications';
+import { formatCheckInDisplay, formatCheckoutDisplay } from '@/lib/bookingCheckoutUtils';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { format } from 'date-fns';
 import QuotationForm from '@/components/QuotationForm';
@@ -122,6 +124,19 @@ const Quotations: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
+        const bookingId = String(data.data?.bookingId ?? data.data?.id ?? '');
+        const details = data.data?.bookingDetails ?? data.data;
+        if (bookingId) {
+          notifyBookingCreated({
+            bookingId,
+            customerName: String(details?.customer_name ?? 'Guest'),
+            roomNumber: String(details?.room_number ?? '—'),
+            checkInLabel: formatCheckInDisplay({ rawFromDate: details?.from_date }),
+            checkOutLabel: formatCheckoutDisplay({ rawToDate: details?.to_date }),
+            createdAt: new Date().toISOString(),
+          });
+        }
+
         toast({
           title: '✅ Success',
           description: 'Quotation converted to booking successfully'

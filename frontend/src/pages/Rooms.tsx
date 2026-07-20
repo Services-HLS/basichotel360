@@ -415,6 +415,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import AddRoomModal from '@/components/AddRoomModal';
 import RoomDetailsModal from '@/components/RoomDetailsModal';
 import EditRoomModal from '@/components/EditRoomModal'; // You'll need to create this
+import { compareRoomNumbers } from '@/lib/utils';
 
 // URLs
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzexlVpr_2umhzBdpoW4juzQo4rj2zB1pU3vlz6wqY78YQX3d2BFntfiV7dgLf6PvC/exec';
@@ -547,6 +548,9 @@ export default function Rooms() {
         roomsData = await fetchFromGoogleSheets();
       }
 
+      roomsData.sort((a, b) =>
+        compareRoomNumbers(a.number ?? a.room_number ?? '', b.number ?? b.room_number ?? '')
+      );
       setRooms(roomsData);
       
       if (isRefresh) {

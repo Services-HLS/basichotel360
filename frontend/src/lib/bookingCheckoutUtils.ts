@@ -101,6 +101,9 @@ export function isBookingBlockingRoom(booking: BookingLike): boolean {
 /** Default lead time for in-app checkout reminders */
 export const CHECKOUT_REMINDER_MS = 60 * 60 * 1000;
 
+/** Default lead time for in-app check-in reminders */
+export const CHECKIN_REMINDER_MS = 60 * 60 * 1000;
+
 function isActiveBookedStatus(status?: string): boolean {
   const s = String(status || '').toLowerCase();
   return !s || s === 'booked';
@@ -131,6 +134,37 @@ export function getMinutesUntilCheckout(booking: BookingLike): number | null {
   const checkoutAt = getBookingCheckoutMoment(booking);
   if (!checkoutAt) return null;
   const diff = checkoutAt.getTime() - Date.now();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / (60 * 1000));
+}
+
+/** Check-in is today and guest has not arrived yet */
+export function isCheckInTodayBooking(booking: BookingLike): boolean {
+  if (!isActiveBookedStatus(booking.status)) return false;
+  const checkInAt = getBookingCheckInMoment(booking);
+  if (!checkInAt) return false;
+  const today = startOfDay(new Date());
+  const checkInDay = startOfDay(checkInAt);
+  return checkInDay.getTime() === today.getTime() && Date.now() < checkInAt.getTime();
+}
+
+/** Check-in within the next hour */
+export function isUpcomingCheckInBooking(
+  booking: BookingLike,
+  withinMs: number = CHECKIN_REMINDER_MS
+): boolean {
+  if (!isActiveBookedStatus(booking.status)) return false;
+  const checkInAt = getBookingCheckInMoment(booking);
+  if (!checkInAt) return false;
+  const now = Date.now();
+  const checkInMs = checkInAt.getTime();
+  return checkInMs > now && checkInMs - now <= withinMs;
+}
+
+export function getMinutesUntilCheckIn(booking: BookingLike): number | null {
+  const checkInAt = getBookingCheckInMoment(booking);
+  if (!checkInAt) return null;
+  const diff = checkInAt.getTime() - Date.now();
   if (diff <= 0) return 0;
   return Math.ceil(diff / (60 * 1000));
 }
@@ -196,7 +230,12 @@ export function formatCheckInDisplay(booking: BookingLike): string {
 }
 
 export const BOOKINGS_UPDATED_EVENT = 'hms-bookings-updated';
+export const CUSTOMERS_UPDATED_EVENT = 'hms-customers-updated';
 
 export function notifyBookingsUpdated() {
   window.dispatchEvent(new CustomEvent(BOOKINGS_UPDATED_EVENT));
+}
+
+export function notifyCustomersUpdated() {
+  window.dispatchEvent(new CustomEvent(CUSTOMERS_UPDATED_EVENT));
 }

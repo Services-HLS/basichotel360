@@ -12,7 +12,7 @@ const roomQueries = {
   FIND_ROOM_BY_ID: `SELECT * FROM rooms WHERE id = ? AND hotel_id = ?`,
   
   // Get rooms by hotel
-  GET_ROOMS_BY_HOTEL: `SELECT * FROM rooms WHERE hotel_id = ? ORDER BY Id`,
+  GET_ROOMS_BY_HOTEL: `SELECT * FROM rooms WHERE hotel_id = ? ORDER BY room_number`,
   
   // Update room
   UPDATE_ROOM: `UPDATE rooms SET room_number = ?, type = ?, floor = ?, price = ?, amenities = ?, status = ? WHERE id = ? AND hotel_id = ?`,

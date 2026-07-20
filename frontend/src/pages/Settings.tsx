@@ -2513,6 +2513,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import QRCodeUpload from "@/components/QRCodeUpload";
 import LogoUpload from "@/components/LogoUpload";
 import { cn } from "@/lib/utils";
+import NotificationDiagnostics from "@/components/NotificationDiagnostics";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwz9609W86UMSUezmt3ST_dUBsZN8JGYOFTS8kpD5SWXlYetozZqwVe3cUD5GIHHQOi/exec";
@@ -2535,8 +2536,14 @@ const validateGSTNumber = (gstNumber: string): { isValid: boolean; message: stri
     return { isValid: false, message: "Invalid GST number format" };
   }
 
-  const stateCode = parseInt(cleanGST.substring(0, 2));
-  if (stateCode < 1 || stateCode > 36) {
+  const stateCode = parseInt(cleanGST.substring(0, 2), 10);
+  const validStateCodes = new Set([
+    ...Array.from({ length: 38 }, (_, i) => i + 1), // 01-38 (includes Telangana 36, Andhra Pradesh 37, Ladakh 38)
+    97, // Other Territory
+    99, // Centre Jurisdiction
+  ]);
+
+  if (!validStateCodes.has(stateCode)) {
     return { isValid: false, message: "Invalid state code in GST number" };
   }
 
@@ -2607,6 +2614,7 @@ const Settings = () => {
     phone: "",
     address: "",
     gstNumber: "",
+    hotelcode: "",
     gstPercentage: 12,
     cgstPercentage: 6,
     sgstPercentage: 6,
@@ -2783,12 +2791,15 @@ const Settings = () => {
         if (settingsData.success && settingsData.data) {
           const hotelData = settingsData.data;
 
+          const loadedGstNumber = hotelData.gstNumber || "";
+
           setFormData({
             name: hotelData.name || "",
             email: hotelData.email || "",
             phone: hotelData.phone || "",
             address: hotelData.address || "",
-            gstNumber: hotelData.gstNumber || "",
+            gstNumber: loadedGstNumber,
+            hotelcode: hotelData.hotelcode || "",
             gstPercentage: hotelData.gstPercentage || 12,
             cgstPercentage: hotelData.cgstPercentage || 6,
             sgstPercentage: hotelData.sgstPercentage || 6,
@@ -2797,6 +2808,10 @@ const Settings = () => {
             qrcode_image: hotelData.qrcode_image || null,
             logo_image: hotelData.logo_image || null,
           });
+
+          if (loadedGstNumber) {
+            setGstValidation(validateGSTNumber(loadedGstNumber));
+          }
 
           if (currentUser.hotel_id) {
             setHotelId(currentUser.hotel_id);
@@ -2813,6 +2828,7 @@ const Settings = () => {
             phone: currentUser.phone || "",
             address: currentUser.address || "",
             gstNumber: currentUser.gst_number || currentUser.gstNumber || "",
+            hotelcode: "",
             gstPercentage: currentUser.gstPercentage || 12,
             cgstPercentage: currentUser.cgstPercentage || (currentUser.gstPercentage ? currentUser.gstPercentage / 2 : 6),
             sgstPercentage: currentUser.sgstPercentage || (currentUser.gstPercentage ? currentUser.gstPercentage / 2 : 6),
@@ -3021,6 +3037,7 @@ const Settings = () => {
             phone: formData.phone,
             address: formData.address,
             gstNumber: formData.gstNumber || null,
+            hotelcode: formData.hotelcode?.trim() || null,
             gstPercentage: parseFloat(formData.gstPercentage.toString()),
             cgstPercentage: parseFloat(formData.cgstPercentage.toString()),
             sgstPercentage: parseFloat(formData.sgstPercentage.toString()),
@@ -3271,6 +3288,25 @@ const Settings = () => {
                 required
               />
             </div>
+
+            {userSource === "database" && (
+              <div className="space-y-2">
+                <Label htmlFor="hotelcode">
+                  AIOSELL Hotel Code
+                  <span className="text-xs text-muted-foreground ml-2">(From AIOSELL CM)</span>
+                </Label>
+                <Input
+                  id="hotelcode"
+                  value={formData.hotelcode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, hotelcode: e.target.value.trim() }))}
+                  placeholder="e.g., 5cafb00333"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for OTA inventory, rates, and reservation mapping with AIOSELL.
+                </p>
+              </div>
+            )}
 
             {userSource === "database" && (
               <div className="space-y-2">
@@ -4120,7 +4156,7 @@ const Settings = () => {
       return (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="relative -mx-1 px-1 sm:mx-0 sm:px-0">
-            <TabsList className="w-full flex flex-nowrap overflow-x-auto overflow-y-hidden pb-1 hide-scrollbar md:grid md:grid-cols-5 md:overflow-visible gap-1 h-auto min-h-10 p-1">
+            <TabsList className="w-full flex flex-nowrap overflow-x-auto overflow-y-hidden pb-1 hide-scrollbar md:grid md:grid-cols-6 md:overflow-visible gap-1 h-auto min-h-10 p-1">
               <TabsTrigger value="general" className="flex-shrink-0 md:flex-shrink whitespace-nowrap px-2.5 py-2 text-xs sm:px-3 sm:text-sm">
                 Settings
               </TabsTrigger>
@@ -4135,6 +4171,9 @@ const Settings = () => {
               </TabsTrigger>
               <TabsTrigger value="password" className="flex-shrink-0 md:flex-shrink whitespace-nowrap px-2.5 py-2 text-xs sm:px-3 sm:text-sm">
                 Password
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="flex-shrink-0 md:flex-shrink whitespace-nowrap px-2.5 py-2 text-xs sm:px-3 sm:text-sm">
+                Notifications
               </TabsTrigger>
             </TabsList>
             <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-background to-transparent md:hidden" />
@@ -4154,6 +4193,9 @@ const Settings = () => {
           </TabsContent>
           <TabsContent value="password" className="space-y-6">
             {renderPasswordChange()}
+          </TabsContent>
+          <TabsContent value="notifications" className="space-y-6">
+            <NotificationDiagnostics />
           </TabsContent>
         </Tabs>
       );

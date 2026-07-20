@@ -46,6 +46,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCurrentUser } from '@/lib/storage';
+import { notifyHousekeepingTask, notifyHousekeepingCompleted } from '@/lib/notificationStore';
 
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -347,6 +348,15 @@ const Housekeeping = () => {
           description: "Housekeeping record created successfully",
           variant: "default"
         });
+        const created = data.data;
+        if (created?.id) {
+          notifyHousekeepingTask({
+            taskId: String(created.id),
+            roomNumber: String(created.room_number || room_number),
+            status: 'pending',
+            cleaningType: newRecord.cleaning_type,
+          });
+        }
         setShowCreateModal(false);
         setNewRecord({
           room_id: '0',
@@ -413,6 +423,13 @@ const Housekeeping = () => {
 
       const data = await response.json();
       if (data.success) {
+        if (updateData.status === 'completed' && selectedRecord) {
+          notifyHousekeepingCompleted({
+            taskId: String(id),
+            roomNumber: String(selectedRecord.room_number),
+          });
+        }
+
         toast({
           title: "Success",
           description: "Record updated successfully",
@@ -452,6 +469,13 @@ const Housekeeping = () => {
 
       const data = await response.json();
       if (data.success) {
+        if (quickUpdateData.status === 'completed' && selectedRecord) {
+          notifyHousekeepingCompleted({
+            taskId: String(id),
+            roomNumber: String(selectedRecord.room_number),
+          });
+        }
+
         toast({
           title: "Success",
           description: "Status updated successfully",
@@ -474,6 +498,7 @@ const Housekeeping = () => {
 
   // Mark as completed
   const markAsCompleted = async (id: number) => {
+    const record = records.find((r) => r.id === id);
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${backendUrl}/housekeeping/${id}/complete`, {
@@ -486,6 +511,13 @@ const Housekeeping = () => {
 
       const data = await response.json();
       if (data.success) {
+        if (record) {
+          notifyHousekeepingCompleted({
+            taskId: String(id),
+            roomNumber: String(record.room_number),
+          });
+        }
+
         toast({
           title: "Success",
           description: "Marked as completed",

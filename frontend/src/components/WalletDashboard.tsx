@@ -20,6 +20,11 @@ import {
   Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  LOW_WALLET_BALANCE,
+  notifyWalletLowBalance,
+  notifyWalletTopup,
+} from '@/lib/notificationStore';
 import { useNavigate } from 'react-router-dom';
 import Layout from './Layout';
 
@@ -59,6 +64,10 @@ const WalletDashboard = () => {
       
       if (result.success) {
         setWalletData(result.data);
+        const balance = Number(result.data?.balance ?? 0);
+        if (balance <= LOW_WALLET_BALANCE) {
+          notifyWalletLowBalance({ balance });
+        }
         console.log('✅ Wallet data loaded:', result.data);
       } else {
         console.warn('⚠️ Wallet API returned success: false');
@@ -197,6 +206,8 @@ const WalletDashboard = () => {
           const verifyData = await verifyResponse.json();
           
           if (verifyData.success) {
+            notifyWalletTopup({ amount: parseFloat(topupAmount) });
+
             toast({
               title: 'Success!',
               description: `₹${topupAmount} added to your wallet`,

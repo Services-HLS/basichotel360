@@ -8,11 +8,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Filter, Download, Edit, Trash2, Calendar } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Calendar, Loader2 } from 'lucide-react';
 import ExpenseForm from '@/components/ExpenseForm';
 import { InputWithIcon } from '@/components/ui/input-with-icon';
 import Layout from '@/components/Layout';
+import { removeNotification } from '@/lib/notificationStore';
 
 interface Expense {
   id: number;
@@ -36,6 +47,8 @@ const Expenses = () => {
   const [category, setCategory] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const categories = [
     { value: 'all', label: 'All Categories' },
@@ -65,20 +78,25 @@ const Expenses = () => {
         }
       );
 
+      if (!response.ok) {
+        throw new Error(`Failed to load expenses (${response.status})`);
+      }
+
       const data = await response.json();
       if (data.success) {
-        // Ensure amount is a number
-        const processedExpenses = data.data.map((expense: any) => ({
+        const processedExpenses = (data.data || []).map((expense: any) => ({
           ...expense,
           amount: parseFloat(expense.amount) || 0
         }));
         setExpenses(processedExpenses);
+      } else {
+        throw new Error(data.message || 'Failed to load expenses');
       }
     } catch (error) {
       console.error('Error fetching expenses:', error);
       toast({
         title: "Error",
-        description: "Failed to load expenses",
+        description: error instanceof Error ? error.message : "Failed to load expenses",
         variant: "destructive"
       });
     } finally {
@@ -88,6 +106,7 @@ const Expenses = () => {
 
   useEffect(() => {
     fetchExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleApplyFilters = () => {
@@ -99,35 +118,75 @@ const Expenses = () => {
     setCategory('all');
     setStartDate('');
     setEndDate('');
-    // Fetch with cleared filters immediately
-    setTimeout(() => fetchExpenses(), 0);
+    setTimeout(() => {
+      void fetchExpenses();
+    }, 0);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return;
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
+
+    const id = expenseToDelete.id;
+    setDeletingId(id);
 
     try {
       const token = localStorage.getItem('authToken');
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
       const response = await fetch(`${backendUrl}/expenses/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
 
-      const data = await response.json();
-      if (data.success) {
-        toast({
-          title: "Success",
-          description: "Expense deleted successfully"
-        });
-        fetchExpenses();
+      window.clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let message = 'Failed to delete expense';
+        try {
+          const errorData = await response.json();
+          message = errorData?.message || message;
+        } catch {
+          // ignore parse errors
+        }
+        throw new Error(message);
       }
+
+      let data: { success?: boolean; message?: string } = {};
+      try {
+        data = await response.json();
+      } catch {
+        // Some proxies return empty body on success
+        data = { success: true };
+      }
+
+      if (data.success === false) {
+        throw new Error(data.message || 'Failed to delete expense');
+      }
+
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+      removeNotification(`expense-large-${id}`);
+
+      toast({
+        title: "Success",
+        description: "Expense deleted successfully"
+      });
+      setExpenseToDelete(null);
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast({
-        title: "Error",
-        description: "Failed to delete expense",
+        title: "Delete failed",
+        description:
+          error instanceof Error && error.name === 'AbortError'
+            ? 'Delete request timed out. Please try again.'
+            : error instanceof Error
+              ? error.message
+              : 'Failed to delete expense',
         variant: "destructive"
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -166,6 +225,14 @@ const Expenses = () => {
     const num = parseFloat(amount);
     if (isNaN(num)) return '₹0.00';
     return `₹${num.toFixed(2)}`;
+  };
+
+  const formatExpenseDate = (value: string) => {
+    if (!value) return '—';
+    const dateOnly = String(value).slice(0, 10);
+    const parsed = new Date(`${dateOnly}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString('en-IN');
   };
 
   return (
@@ -312,7 +379,7 @@ const Expenses = () => {
                   {expenses.map((expense) => (
                     <TableRow key={expense.id}>
                       <TableCell>
-                        {new Date(expense.expense_date).toLocaleDateString()}
+                        {formatExpenseDate(expense.expense_date)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {expense.expense_name}
@@ -344,9 +411,14 @@ const Expenses = () => {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => handleDelete(expense.id)}
+                            disabled={deletingId === expense.id}
+                            onClick={() => setExpenseToDelete(expense)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deletingId === expense.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                       </TableCell>
@@ -371,6 +443,46 @@ const Expenses = () => {
             expense={selectedExpense}
           />
         )}
+
+        <AlertDialog
+          open={!!expenseToDelete}
+          onOpenChange={(open) => {
+            if (!open && deletingId === null) {
+              setExpenseToDelete(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete expense?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {expenseToDelete
+                  ? `Remove "${expenseToDelete.expense_name}" (${formatAmount(expenseToDelete.amount)})? This cannot be undone.`
+                  : 'This expense will be permanently removed.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deletingId !== null}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmDeleteExpense();
+                }}
+              >
+                {deletingId !== null ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

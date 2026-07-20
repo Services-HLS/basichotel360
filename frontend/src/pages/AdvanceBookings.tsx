@@ -44,7 +44,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
-import { cn } from '@/lib/utils';
+import { cn, compareRoomNumbers } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import MultiRoomBookingForm from '@/components/MultiRoomBookingForm';
 
@@ -503,6 +503,7 @@ const AdvanceBookings = () => {
                 status: room.status || 'available'
             }));
 
+            transformedRooms.sort((a, b) => compareRoomNumbers(a.number, b.number));
             console.log('Transformed rooms:', transformedRooms);
             setRooms(transformedRooms);
 

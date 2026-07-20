@@ -6733,6 +6733,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -7040,49 +7041,17 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
   const validateReferralCode = async () => {
     if (!referralCode.trim()) {
       setReferralValid(false);
+      setReferralDetails(null);
       return;
     }
 
     setReferralValidating(true);
     try {
-      const response = await fetch(`${NODE_BACKEND_URL}/wallet/referral/validate/${referralCode}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setReferralValid(true);
-          setReferralDetails(data.data);
-          toast({
-            title: 'Referral Code Valid!',
-            description: `You'll earn benefits from ${data.data.referrer_name}`,
-            variant: 'default',
-          });
-        } else {
-          setReferralValid(false);
-          toast({
-            title: 'Invalid Code',
-            description: 'Please enter a valid referral code',
-            variant: 'destructive',
-          });
-        }
-      } else {
-        setReferralValid(false);
-        toast({
-          title: 'Error',
-          description: 'Failed to validate referral code',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
       setReferralValid(false);
+      setReferralDetails(null);
       toast({
-        title: 'Error',
-        description: 'Network error. Please try again.',
+        title: 'Referral unavailable',
+        description: 'Referral and wallet features are disabled.',
         variant: 'destructive',
       });
     } finally {
@@ -8380,11 +8349,24 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
     <>
       {/* Registration Modal */}
       <Dialog open={open && !showWelcomeScreen} onOpenChange={onClose}>
-        <DialogContent className="max-w-[95vw] mx-auto sm:max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader className="px-0 sm:px-2">
-            <DialogTitle className="text-lg sm:text-xl">
-              {basicOnly ? "Register" : "Register New Hotel"}
-            </DialogTitle>
+        <DialogContent className="max-w-[95vw] mx-auto sm:max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 [&>button.absolute]:hidden">
+          <DialogHeader className="space-y-1.5 px-0 text-left sm:px-2">
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="text-lg sm:text-xl">
+                {basicOnly ? "Register" : "Register New Hotel"}
+              </DialogTitle>
+              <DialogClose asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  aria-label="Close registration"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
             <DialogDescription className="text-sm sm:text-base">
               {basicOnly
                 ? "Enter your username and phone number to create your account"

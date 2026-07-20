@@ -653,7 +653,7 @@ const customerController = {
         SELECT id, hotel_id, name, phone, email, customer_gst_no, 
                address, city, state, pincode, purpose_of_visit,
                other_expenses, expense_description, id_type, 
-               customer_number, id_number, created_at
+               customer_number, id_number, id_image, id_image2, created_at
         FROM customers 
         WHERE hotel_id = ? 
         AND phone IN (${placeholders})

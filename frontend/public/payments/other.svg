@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Other UPI">
+  <rect width="64" height="64" rx="14" fill="#64748b"/>
+  <text x="32" y="36" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="12" font-weight="700">UPI</text>
+  <text x="32" y="48" text-anchor="middle" fill="#e2e8f0" font-family="Arial,sans-serif" font-size="9">Other</text>
+</svg>

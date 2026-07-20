@@ -336,6 +336,8 @@ class Booking {
     addField('to_date', bookingData.to_date);
     addField('from_time', bookingData.from_time);
     addField('to_time', bookingData.to_time);
+    addField('actual_checkout_date', bookingData.actual_checkout_date);
+    addField('actual_checkout_time', bookingData.actual_checkout_time);
     addField('amount', bookingData.amount, true);
     addField('service', bookingData.service, true);
     addField('gst', bookingData.gst, true);
@@ -373,6 +375,7 @@ class Booking {
     addField('guests', bookingData.guests, true);
     addField('special_requests', bookingData.special_requests);
     addField('payment_method', bookingData.payment_method);
+    addField('online_payment_app', bookingData.online_payment_app);
     addField('payment_status', bookingData.payment_status);
     addField('transaction_id', bookingData.transaction_id);
     addField('referral_by', bookingData.referral_by);
