@@ -26,6 +26,7 @@ router.delete('/:id', bookingController.deleteBooking);
 // Add these routes after all other routes
 router.get('/:id/invoice',  bookingController.generateInvoice);
 router.get('/:id/invoice/download',  bookingController.downloadInvoice);
+router.get('/:id/invoice/pdf', bookingController.downloadInvoicePDF);
 router.put('/:id/invoice-number',  bookingController.updateInvoiceNumber);
 
 // Add these to your booking routes

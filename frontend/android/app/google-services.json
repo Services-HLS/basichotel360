@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "111289920171",
+    "project_id": "hotel360-c882a",
+    "storage_bucket": "hotel360-c882a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111289920171:android:9f5f3623ec5cb0795f25ee",
+        "android_client_info": {
+          "package_name": "com.hls.hotelapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1OnhyXtSz6t7km6s--SIKNPyQk-qhGGI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -2395,39 +2395,19 @@ const Bookings = () => {
 
   const downloadInvoice = async (bookingId: string) => {
     try {
-      const token = localStorage.getItem('authToken');
-
       toast({
-        title: "Generating Invoice",
+        title: "Generating Invoice PDF",
         description: "Please wait while we generate your invoice...",
         duration: 2000
       });
 
-      const response = await fetch(`${NODE_BACKEND_URL}/bookings/${bookingId}/invoice/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'text/html'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to download invoice: ${response.status}`);
-      }
-
-      const htmlContent = await response.text();
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `invoice-${bookingId}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      const { fetchBookingInvoicePdf, saveInvoicePdf } = await import('@/lib/invoicePdfUtils');
+      const blob = await fetchBookingInvoicePdf(bookingId, NODE_BACKEND_URL);
+      await saveInvoicePdf(blob, `invoice-${bookingId}.pdf`);
 
       toast({
-        title: "✅ Invoice Downloaded",
-        description: "Invoice has been downloaded successfully",
+        title: "✅ Invoice PDF ready",
+        description: "Invoice PDF is ready to save or print",
         duration: 3000
       });
 
@@ -2435,7 +2415,7 @@ const Bookings = () => {
       console.error('❌ Error downloading invoice:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to download invoice",
+        description: error.message || "Failed to download invoice PDF",
         variant: "destructive",
         duration: 5000
       });
@@ -7296,7 +7276,7 @@ const Bookings = () => {
                           ? 'Amount Paying Now (₹) *'
                           : 'Amount to Pay at Checkout (₹) *'}
                       </Label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           type="number"
                           min="0"
@@ -7304,14 +7284,14 @@ const Bookings = () => {
                           step="1"
                           value={checkoutAmountToPay || ''}
                           onChange={(e) => setCheckoutAmountToPay(parseFloat(e.target.value) || 0)}
-                          className="h-10"
+                          className="h-10 min-w-0 flex-1"
                           placeholder="Enter amount"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="whitespace-nowrap h-10"
+                          className="h-10 w-full shrink-0 whitespace-normal px-2 text-xs sm:w-auto sm:whitespace-nowrap sm:px-3 sm:text-sm"
                           onClick={() => setCheckoutAmountToPay(
                             checkoutTotals.advancePaid > 0
                               ? checkoutTotals.balanceDue

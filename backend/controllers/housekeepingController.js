@@ -1,5 +1,4 @@
 const Housekeeping = require('../models/Housekeeping');
-const notificationEvents = require('../services/notificationEvents');
 
 class HousekeepingController {
   // Get all housekeeping records with filters
@@ -188,13 +187,6 @@ static async getRecords(req, res) {
 
       // Get the created record
       const record = await Housekeeping.getById(recordId, hotel_id);
-
-      void notificationEvents.notifyHousekeepingTask(hotel_id, {
-        taskId: recordId,
-        roomNumber: record?.room_number || finalRoomNumber,
-        status: status || 'pending',
-        overdue: false,
-      });
 
       res.status(201).json({
         success: true,

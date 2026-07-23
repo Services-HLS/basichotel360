@@ -33,7 +33,6 @@ class NotificationScheduler {
     await Promise.allSettled([
       this.alertPendingCheckouts(),
       this.alertCheckoutSoon(),
-      this.alertOverdueHousekeeping(),
       this.alertFunctionEventsToday(),
     ]);
   }
@@ -84,25 +83,6 @@ class NotificationScheduler {
         customerName: row.customer_name,
         roomNumber: row.room_number,
         minutesLeft: row.minutes_left,
-      });
-    }
-  }
-
-  async alertOverdueHousekeeping() {
-    const [rows] = await pool.execute(`
-      SELECT h.id, h.hotel_id, h.room_number, h.status, h.cleaning_date
-      FROM housekeeping h
-      WHERE h.status IN ('pending', 'delayed')
-        AND h.cleaning_date IS NOT NULL
-        AND h.cleaning_date < CURDATE()
-    `);
-
-    for (const row of rows) {
-      await notificationEvents.notifyHousekeepingTask(row.hotel_id, {
-        taskId: row.id,
-        roomNumber: row.room_number,
-        status: row.status,
-        overdue: true,
       });
     }
   }

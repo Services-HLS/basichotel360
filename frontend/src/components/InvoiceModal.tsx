@@ -1,6 +1,7 @@
 
 
 import { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { formatGuestsForDisplay } from '@/lib/guestUtils';
+import { cn } from '@/lib/utils';
+import {
+  fetchBookingInvoicePdf,
+  htmlContentToPdfBlob,
+  printInvoicePdf,
+  saveInvoicePdf,
+} from '@/lib/invoicePdfUtils';
 
 interface InvoiceModalProps {
   bookingId: string;
@@ -59,6 +67,7 @@ const InvoiceModal = ({
 }: InvoiceModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(source === 'database');
+  const [isDownloading, setIsDownloading] = useState(false);
   const [databaseInvoice, setDatabaseInvoice] = useState<any>(null);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -121,50 +130,35 @@ const InvoiceModal = ({
 
   const downloadDatabaseInvoice = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('authToken');
-      
-      const response = await fetch(`${NODE_BACKEND_URL}/bookings/${bookingId}/invoice/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-${bookingId}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      setIsDownloading(true);
+      const blob = await fetchBookingInvoicePdf(bookingId, NODE_BACKEND_URL);
+      const invoiceNum = databaseInvoice?.invoiceNumber || bookingId;
+      await saveInvoicePdf(blob, `invoice-${invoiceNum}.pdf`);
 
       toast({
-        title: "✅ Invoice Downloaded",
-        description: "Invoice has been downloaded successfully",
-        duration: 3000
+        title: '✅ Invoice PDF ready',
+        description: Capacitor.isNativePlatform()
+          ? 'Choose Save or Print from the share menu'
+          : 'Invoice PDF downloaded successfully',
+        duration: 3000,
       });
     } catch (error: any) {
       console.error('Database download error:', error);
       toast({
-        title: "Download Failed",
-        description: error.message || "Failed to download invoice file",
-        variant: "destructive",
-        duration: 3000
+        title: 'Download Failed',
+        description: error.message || 'Failed to download invoice PDF',
+        variant: 'destructive',
+        duration: 3000,
       });
     } finally {
-      setLoading(false);
+      setIsDownloading(false);
     }
   };
 
   // ========== GOOGLE SHEETS FUNCTIONS ==========
-  const downloadGoogleSheetsInvoice = () => {
+  const downloadGoogleSheetsInvoice = async () => {
     try {
+      setIsDownloading(true);
       if (!bookingData) {
         throw new Error('Booking data not found');
       }
@@ -172,122 +166,98 @@ const InvoiceModal = ({
       const user = userData || currentUser;
       const nights = calculateNights(bookingData.fromDate, bookingData.toDate);
       const htmlContent = createGoogleSheetsPrintHTML(bookingData, user, nights);
-      
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-${bookingId}-${format(new Date(), 'yyyy-MM-dd')}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const blob = await htmlContentToPdfBlob(htmlContent);
+      await saveInvoicePdf(
+        blob,
+        `invoice-${bookingId}-${format(new Date(), 'yyyy-MM-dd')}.pdf`
+      );
 
       toast({
-        title: "✅ Invoice Downloaded",
-        description: "Invoice has been downloaded as HTML file",
-        duration: 3000
+        title: '✅ Invoice PDF ready',
+        description: Capacitor.isNativePlatform()
+          ? 'Choose Save or Print from the share menu'
+          : 'Invoice PDF downloaded successfully',
+        duration: 3000,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google Sheets download error:', error);
       toast({
-        title: "Download Failed",
-        description: "Could not download invoice file",
-        variant: "destructive",
-        duration: 3000
+        title: 'Download Failed',
+        description: error?.message || 'Could not download invoice PDF',
+        variant: 'destructive',
+        duration: 3000,
       });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
-  // ========== PRINT FUNCTIONS ==========
-  const handleDatabasePrint = (invoice: any) => {
+  const handleDatabasePrint = async (invoice: any) => {
     try {
-      const printHTML = createDatabasePrintHTML(invoice);
-      openPrintWindow(printHTML);
-    } catch (error) {
+      setIsDownloading(true);
+      const blob = await fetchBookingInvoicePdf(bookingId, NODE_BACKEND_URL);
+      const invoiceNum = invoice?.invoiceNumber || bookingId;
+      await printInvoicePdf(blob, `invoice-${invoiceNum}.pdf`);
+    } catch (error: any) {
       console.error('Database print error:', error);
       toast({
-        title: "Print Error",
-        description: "Failed to print database invoice",
-        variant: "destructive"
+        title: 'Print Error',
+        description: error.message || 'Failed to print invoice PDF',
+        variant: 'destructive',
       });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
-  const handleGoogleSheetsPrint = () => {
+  const handleGoogleSheetsPrint = async () => {
     try {
       if (!bookingData) {
         toast({
-          title: "Error",
-          description: "Booking data not found for printing",
-          variant: "destructive"
+          title: 'Error',
+          description: 'Booking data not found for printing',
+          variant: 'destructive',
         });
         return;
       }
 
+      setIsDownloading(true);
       const user = userData || currentUser;
       const nights = calculateNights(bookingData.fromDate, bookingData.toDate);
-      const printHTML = createGoogleSheetsPrintHTML(bookingData, user, nights);
-      openPrintWindow(printHTML);
-    } catch (error) {
+      const htmlContent = createGoogleSheetsPrintHTML(bookingData, user, nights);
+      const blob = await htmlContentToPdfBlob(htmlContent);
+      await printInvoicePdf(blob, `invoice-${bookingId}.pdf`);
+    } catch (error: any) {
       console.error('Google Sheets print error:', error);
       toast({
-        title: "Print Error",
-        description: "Failed to print invoice",
-        variant: "destructive"
+        title: 'Print Error',
+        description: error?.message || 'Failed to print invoice',
+        variant: 'destructive',
       });
+    } finally {
+      setIsDownloading(false);
     }
-  };
-
-  const openPrintWindow = (htmlContent: string) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast({
-        title: "Error",
-        description: "Please allow popups to print invoice",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    printWindow.onload = () => {
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.onafterprint = () => {
-          setTimeout(() => printWindow.close(), 500);
-        };
-      }, 500);
-    };
   };
 
   const handlePrint = () => {
     if (source === 'database' && databaseInvoice) {
-      handleDatabasePrint(databaseInvoice);
+      void handleDatabasePrint(databaseInvoice);
     } else if (source === 'google_sheets' && bookingData) {
-      handleGoogleSheetsPrint();
+      void handleGoogleSheetsPrint();
     } else {
       toast({
-        title: "Error",
-        description: "No invoice data available for printing",
-        variant: "destructive"
+        title: 'Error',
+        description: 'No invoice data available for printing',
+        variant: 'destructive',
       });
     }
   };
 
   const handleDownload = () => {
-    if (onDownload) {
-      onDownload();
-      return;
-    }
-    
     if (source === 'database') {
-      downloadDatabaseInvoice();
+      void downloadDatabaseInvoice();
     } else {
-      downloadGoogleSheetsInvoice();
+      void downloadGoogleSheetsInvoice();
     }
   };
 
@@ -924,59 +894,46 @@ const InvoiceModal = ({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="flex items-center gap-2 text-2xl">
-                <FileText className="w-6 h-6" />
-                INVOICE
-              </DialogTitle>
-              <DialogDescription>
-                Booking #{bookingId}
-                {!allowPrint && !allowDownload
-                  ? ' • View only (Basic plan)'
-                  : source === 'database'
-                    ? ' • Pro Plan'
-                    : ' • Basic Plan'}
-              </DialogDescription>
+      <DialogContent
+        className={cn(
+          'flex max-h-[min(92dvh,90vh)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:rounded-lg',
+          // Close (X): centered icon, no border/ring
+          '[&>button]:right-3 [&>button]:top-3 [&>button]:flex [&>button]:h-9 [&>button]:w-9',
+          '[&>button]:items-center [&>button]:justify-center [&>button]:rounded-full',
+          '[&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:shadow-none',
+          '[&>button]:ring-0 [&>button]:ring-offset-0 [&>button]:outline-none',
+          '[&>button]:focus:ring-0 [&>button]:focus:ring-offset-0 [&>button]:focus-visible:ring-0',
+          '[&>button]:focus-visible:outline-none [&>button]:hover:bg-muted/60',
+          'sm:[&>button]:right-4 sm:[&>button]:top-4'
+        )}
+      >
+        <div className="shrink-0 border-b px-4 pb-3 pt-4 pr-12">
+          <DialogHeader className="space-y-3 text-left">
+            <div className="flex min-w-0 items-start gap-2">
+              <FileText className="mt-0.5 h-6 w-6 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <DialogTitle className="text-xl sm:text-2xl">INVOICE</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">
+                  Booking #{bookingId}
+                  {!allowPrint && !allowDownload
+                    ? ' • View only (Basic plan)'
+                    : source === 'database'
+                      ? ' • Pro Plan'
+                      : ' • Basic Plan'}
+                </DialogDescription>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {renderBooking?.status && (
                 <Badge className={getStatusColor(renderBooking.status)}>
                   {renderBooking.status.toUpperCase()}
                 </Badge>
               )}
-              {allowPrint && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={handlePrint}
-                disabled={loading}
-                className="gap-2"
-                data-basic-plan-allow
-              >
-                <Printer className="w-4 h-4" />
-                Print
-              </Button>
-              )}
-              {allowDownload && (
-                <Button 
-                  size="sm" 
-                  variant="default" 
-                  onClick={handleDownload}
-                  disabled={loading}
-                  className="gap-2"
-                  data-basic-plan-allow
-                >
-                  <Download className="w-4 h-4" />
-                  Download
-                </Button>
-              )}
             </div>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
+        </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
@@ -1011,9 +968,9 @@ const InvoiceModal = ({
           <div className="space-y-6">
             {/* Hotel Header */}
             <div className="text-center border-b pb-6" id="invoice-content">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <Building className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold text-primary">
+              <div className="mb-4 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-3">
+                <Building className="h-8 w-8 shrink-0 text-primary" />
+                <h1 className="text-xl font-bold text-primary sm:text-3xl">
                   {source === 'database' && databaseInvoice 
                     ? databaseInvoice.hotel.name 
                     : user?.hotelName || user?.name || 'Hotel Name'
@@ -1076,26 +1033,26 @@ const InvoiceModal = ({
                     Customer Details
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-muted-foreground">Name:</span>
-                      <span className="font-medium">{renderCustomer?.name || 'N/A'}</span>
+                      <span className="font-medium break-words text-right sm:text-left">{renderCustomer?.name || 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-muted-foreground">Phone:</span>
-                      <span className="font-medium">{renderCustomer?.phone || 'N/A'}</span>
+                      <span className="font-medium break-words text-right sm:text-left">{renderCustomer?.phone || 'N/A'}</span>
                     </div>
                     {source === 'database' && databaseInvoice?.customer?.email && (
-                      <div className="flex justify-between">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-muted-foreground">Email:</span>
-                        <span className="font-medium">{databaseInvoice.customer.email}</span>
+                        <span className="font-medium break-all text-right sm:text-left">{databaseInvoice.customer.email}</span>
                       </div>
                     )}
                     {source === 'database' && databaseInvoice?.customer?.idNumber && (
-                      <div className="flex justify-between">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-muted-foreground">
                           {databaseInvoice.customer.idType}:
                         </span>
-                        <span className="font-medium">{databaseInvoice.customer.idNumber}</span>
+                        <span className="font-medium break-all text-right sm:text-left">{databaseInvoice.customer.idNumber}</span>
                       </div>
                     )}
                   </div>
@@ -1352,36 +1309,55 @@ const InvoiceModal = ({
           </div>
         )}
 
+        </div>
+
         {/* Action Buttons */}
-        <div className="flex justify-between items-center pt-6 border-t">
-          {/* <div className="text-sm text-muted-foreground">
-            Plan: <Badge variant="outline" className="ml-2">
-              {source === 'database' ? 'Pro Plan' : 'Basic Plan'}
-            </Badge>
-          </div> */}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
-              <X className="w-4 h-4 mr-2" />
-              Close
-            </Button>
-            {!loading && !databaseError && (
-              <>
-                {allowPrint && (
-                <Button onClick={handlePrint} data-basic-plan-allow>
-                  <Printer className="w-4 h-4 mr-2" />
-                  Print
-                </Button>
+        {!loading && !databaseError && (allowPrint || allowDownload) && (
+          <div className="relative z-10 flex shrink-0 gap-2 border-t bg-background px-4 py-3 sm:px-6">
+            {allowPrint && (
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handlePrint();
+                }}
+                data-basic-plan-allow
+                variant="outline"
+                disabled={isDownloading}
+                className="h-10 flex-1"
+              >
+                {isDownloading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="mr-2 h-4 w-4" />
                 )}
-                {allowDownload && (
-                  <Button onClick={handleDownload} variant="default" data-basic-plan-allow>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </Button>
+                Print
+              </Button>
+            )}
+            {allowDownload && (
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDownload();
+                }}
+                variant="default"
+                data-basic-plan-allow
+                disabled={isDownloading}
+                className="h-10 flex-1"
+              >
+                {isDownloading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
                 )}
-              </>
+                {isDownloading ? 'Downloading…' : 'Download'}
+              </Button>
             )}
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );

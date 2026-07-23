@@ -40,6 +40,27 @@ import { getCurrentUser } from '@/lib/storage';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
+/** App brand logo for notification list (from public/newlogo.png) */
+const NOTIFICATION_LOGO_SRC = '/newlogo.png';
+
+function NotificationBrandMark({ compact }: { compact?: boolean }) {
+  const size = compact ? 'h-7 w-7' : 'h-8 w-8';
+  return (
+    <div
+      className={cn(
+        'relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm',
+        size
+      )}
+    >
+      <img
+        src={NOTIFICATION_LOGO_SRC}
+        alt="Hotel360"
+        className="h-full w-full object-contain p-0.5"
+      />
+    </div>
+  );
+}
+
 const MODULE_BADGE_STYLES: Partial<Record<NotificationModule, string>> = {
   checkout: 'bg-orange-50 text-orange-800 border-orange-200',
   booking: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -107,36 +128,41 @@ function NotificationSection({
             )}
             onClick={() => onOpen(item)}
           >
-            <div className="flex items-center justify-between gap-1.5">
-              <p
-                className={cn(
-                  'font-medium truncate min-w-0 flex-1',
-                  compact ? 'text-xs leading-tight' : 'text-sm'
-                )}
-              >
-                {item.title}
-              </p>
-              {item.badge && (
-                <Badge
-                  variant="outline"
+            <div className="flex items-start gap-2.5 min-w-0">
+              <NotificationBrandMark compact={compact} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-1.5">
+                  <p
+                    className={cn(
+                      'font-medium truncate min-w-0 flex-1',
+                      compact ? 'text-xs leading-tight' : 'text-sm'
+                    )}
+                  >
+                    {item.title}
+                  </p>
+                  {item.badge && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'shrink-0 h-4 px-1 text-[9px]',
+                        MODULE_BADGE_STYLES[module]
+                      )}
+                    >
+                      {item.badge}
+                    </Badge>
+                  )}
+                </div>
+                <p
                   className={cn(
-                    'shrink-0 h-4 px-1 text-[9px]',
-                    MODULE_BADGE_STYLES[module]
+                    'text-muted-foreground truncate',
+                    compact ? 'text-[10px] mt-0.5' : 'text-[11px] mt-1',
+                    module === 'checkout' && 'text-orange-700'
                   )}
                 >
-                  {item.badge}
-                </Badge>
-              )}
+                  {item.message}
+                </p>
+              </div>
             </div>
-            <p
-              className={cn(
-                'text-muted-foreground truncate',
-                compact ? 'text-[10px] mt-0.5' : 'text-[11px] mt-1',
-                module === 'checkout' && 'text-orange-700'
-              )}
-            >
-              {item.message}
-            </p>
           </button>
         ))}
       </div>
@@ -168,6 +194,17 @@ function NotificationPanel({
 
   return (
     <div className={cn('flex min-h-0 flex-col', compact && 'max-h-[70dvh]')}>
+      {!compact && (
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+          <NotificationBrandMark />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-tight">Notifications</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              Hotel360 alerts
+            </p>
+          </div>
+        </div>
+      )}
       <div
         className={cn(
           'min-h-0 flex-1 overflow-y-auto',
@@ -411,9 +448,12 @@ export default function CheckoutNotifications() {
             )}
           >
             <DialogHeader className="sticky top-0 z-10 shrink-0 flex flex-row items-center justify-between gap-2 border-b bg-background px-3 py-3 text-left">
-              <DialogTitle className="text-sm font-semibold leading-none">
-                Notifications
-              </DialogTitle>
+              <div className="flex min-w-0 items-center gap-2">
+                <NotificationBrandMark compact />
+                <DialogTitle className="text-sm font-semibold leading-none">
+                  Notifications
+                </DialogTitle>
+              </div>
               <DialogClose asChild>
                 <Button
                   type="button"

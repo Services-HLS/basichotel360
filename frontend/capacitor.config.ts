@@ -12,8 +12,10 @@ const config: CapacitorConfig = {
       enabled: true,
     },
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
-      iconColor: '#f97316',
+      // Status-bar icon must be white silhouette (Android requirement)
+      smallIcon: 'ic_stat_hotel360',
+      iconColor: '#0d9488',
+      // Full-color brand logo (public/newlogo.png → drawable/ic_notification_logo)
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],

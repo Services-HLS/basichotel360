@@ -7,6 +7,11 @@ import {
 const CHECKIN_REMINDER_MS = 60 * 60 * 1000;
 const CHECKOUT_REMINDER_MS = 30 * 60 * 1000;
 const TRIAL_REMINDER_DAYS = [3, 1];
+/** Status-bar icon — white silhouette (Android requirement) */
+const NOTIFICATION_SMALL_ICON = 'ic_stat_hotel360';
+/** Full-color brand logo from public/newlogo.png */
+const NOTIFICATION_LARGE_ICON = 'ic_notification_logo';
+const NOTIFICATION_ICON_COLOR = '#0d9488';
 
 let permissionRequested = false;
 
@@ -17,6 +22,14 @@ function hashId(seed: string): number {
     hash |= 0;
   }
   return Math.abs(hash) % 2147480000;
+}
+
+function iconFields() {
+  return {
+    smallIcon: NOTIFICATION_SMALL_ICON,
+    largeIcon: NOTIFICATION_LARGE_ICON,
+    iconColor: NOTIFICATION_ICON_COLOR,
+  };
 }
 
 export async function initLocalNotifications(): Promise<void> {
@@ -78,6 +91,7 @@ export function scheduleBookingReminders(
           title: 'Guest arriving soon',
           body: `${b.customerName} · Room ${b.roomNumber} checks in in 1 hour`,
           schedule: { at: new Date(at) },
+          ...iconFields(),
           extra: { route: `/bookings?focus=${b.id}` },
         });
       }
@@ -91,6 +105,7 @@ export function scheduleBookingReminders(
           title: 'Checkout reminder',
           body: `${b.customerName} · Room ${b.roomNumber} checkout in 30 minutes`,
           schedule: { at: new Date(at) },
+          ...iconFields(),
           extra: { route: `/bookings?status=pending_checkout&focus=${b.id}` },
         });
       }
@@ -124,6 +139,7 @@ export function scheduleTrialReminders(trialExpiryDate: string): void {
             ? 'Your Hotel360 trial expires tomorrow. Upgrade to keep full access.'
             : `Your Hotel360 trial expires in ${daysBefore} days.`,
         schedule: { at },
+        ...iconFields(),
         extra: { route: '/upgrade' },
       });
     }
@@ -147,6 +163,7 @@ export async function showImmediateLocalNotification(item: {
         title: item.title,
         body: item.body,
         schedule: { at: new Date(Date.now() + 500) },
+        ...iconFields(),
         extra: { route: item.route },
       },
     ],

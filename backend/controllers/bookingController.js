@@ -1,6 +1,7 @@
 
 
 const BlockMaintenancePdfService = require('../services/blockMaintenancePdfService');
+const PDFService = require('../services/pdfService');
 
 const Booking = require('../models/Booking');
 const Room = require('../models/Room');
@@ -3034,6 +3035,56 @@ const bookingController = {
         success: false,
         error: 'SERVER_ERROR',
         message: 'Internal server error: ' + error.message
+      });
+    }
+  },
+
+  downloadInvoicePDF: async (req, res) => {
+    try {
+      const capture = { html: null, statusCode: 200, jsonBody: null };
+      const captureRes = {
+        setHeader() {},
+        status(code) {
+          capture.statusCode = code;
+          return captureRes;
+        },
+        json(body) {
+          capture.jsonBody = body;
+          return captureRes;
+        },
+        send(data) {
+          capture.html = data;
+          return captureRes;
+        },
+      };
+
+      await bookingController.downloadInvoice(req, captureRes);
+
+      if (capture.jsonBody || !capture.html) {
+        return res.status(capture.statusCode || 500).json(
+          capture.jsonBody || {
+            success: false,
+            error: 'INVOICE_HTML_FAILED',
+            message: 'Failed to generate invoice HTML',
+          }
+        );
+      }
+
+      const pdfBuffer = await PDFService.generatePDF(capture.html, { landscape: false });
+      const invoiceLabel = String(req.params.id || 'invoice');
+      const filename = `invoice-${invoiceLabel}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('❌ Download invoice PDF error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'PDF_GENERATION_FAILED',
+        message: 'Failed to generate invoice PDF: ' + error.message,
       });
     }
   },

@@ -125,25 +125,6 @@ function notifyRoomNeedsCleaning(hotelId, { bookingId, roomNumber, customerName 
   );
 }
 
-function notifyHousekeepingTask(hotelId, { taskId, roomNumber, status, overdue }) {
-  return notifyHotel(
-    hotelId,
-    {
-      module: 'housekeeping',
-      title: `Room ${roomNumber || '—'}`,
-      message: overdue
-        ? 'Overdue housekeeping task'
-        : `Housekeeping task — ${status || 'pending'}`,
-      entityId: taskId,
-      route: '/housekeeping',
-      priority: overdue ? 'high' : 'normal',
-    },
-    overdue
-      ? { dedupe: dedupeKey(['hk-overdue', hotelId, taskId, new Date().toISOString().slice(0, 10)]) }
-      : undefined
-  );
-}
-
 function notifyFunctionEventToday(hotelId, { bookingId, hallName, customerName }) {
   return notifyHotel(
     hotelId,
@@ -178,7 +159,6 @@ module.exports = {
   notifyCheckoutSoon,
   notifyPendingCheckout,
   notifyRoomNeedsCleaning,
-  notifyHousekeepingTask,
   notifyFunctionEventToday,
   notifyFunctionBookingCreated,
 };

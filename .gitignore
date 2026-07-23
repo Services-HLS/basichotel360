@@ -5,9 +5,6 @@ node_modules/
 .env
 .env.*
 !.env.example
-firebase-service-account.json
-**/firebase-service-account.json
-
 # Build output
 dist/
 build/
@@ -29,3 +26,8 @@ Thumbs.db
 # Uploads / runtime data (if large or sensitive)
 backend/uploads/
 uploads/
+
+
+backend/backend.zip
+
+backend/firebase-service-account.json

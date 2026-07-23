@@ -5826,7 +5826,8 @@ export default function BookingForm({
           'flex w-[100vw] max-w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl sm:gap-4 sm:p-6',
           'fixed inset-x-0 bottom-0 top-auto h-[min(100dvh,100%)] max-h-[100dvh] translate-x-0 translate-y-0',
           'rounded-t-2xl rounded-b-none border-b-0 sm:inset-auto sm:top-[50%] sm:left-[50%] sm:h-auto sm:max-h-[90vh]',
-          'sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg'
+          'sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg',
+          '[&>button]:right-3 [&>button]:top-3 sm:[&>button]:right-4 sm:[&>button]:top-4'
         )}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -5835,7 +5836,7 @@ export default function BookingForm({
           Booking form for room {room?.number}. Please fill in customer details, upload ID proof, and complete payment to confirm your reservation.
         </div>
         <DialogHeader className="space-y-3 text-left">
-          <div className="flex items-start justify-between gap-3 pr-8">
+          <div className="flex items-start justify-between gap-3 pr-12">
             <DialogTitle className="text-base font-semibold leading-snug sm:text-lg">
               <span className="block">{title}</span>
               <span className="mt-0.5 block text-sm font-normal text-muted-foreground">
@@ -6194,12 +6195,22 @@ export default function BookingForm({
               </h3>
               
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="mb-4 grid h-11 w-full grid-cols-2 rounded-lg p-1 sm:mb-6">
-                  <TabsTrigger value="basic" className="text-xs font-semibold sm:text-sm">Basic</TabsTrigger>
-                  <TabsTrigger value="additional" className="text-xs font-semibold sm:text-sm">More info</TabsTrigger>
+                <TabsList className="mb-4 grid h-10 w-full grid-cols-2 gap-1 rounded-xl bg-muted/80 p-1 sm:mb-6">
+                  <TabsTrigger
+                    value="basic"
+                    className="h-8 rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-none sm:text-sm"
+                  >
+                    Basic
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="additional"
+                    className="h-8 rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-none sm:text-sm"
+                  >
+                    More info
+                  </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="basic" className="mt-2 space-y-4 sm:space-y-6">
+                <TabsContent value="basic" className="mt-0 space-y-4 focus-visible:outline-none sm:space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
                     {/* Name */}
                     <div className="space-y-2">
@@ -6339,7 +6350,7 @@ export default function BookingForm({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="additional" className="space-y-6 mt-2">
+                <TabsContent value="additional" className="mt-0 space-y-4 focus-visible:outline-none sm:space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Email */}
                     <div className="space-y-2">

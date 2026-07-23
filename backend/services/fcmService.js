@@ -182,6 +182,10 @@ async function sendToTokens(tokens, payload) {
     android: {
       priority: 'high',
       notification: {
+        icon: 'ic_stat_hotel360',
+        color: '#0d9488',
+        // Full-color newlogo (hosted on web app) shown as large notification image
+        imageUrl: process.env.NOTIFICATION_IMAGE_URL || 'https://hms.hithlakshsolutions.com/newlogo.png',
         sound: 'default',
         channelId: 'hotel360_default',
       },

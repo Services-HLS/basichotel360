@@ -21,17 +21,21 @@ import { localDateStr } from '@/lib/dateUtils';
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001/api';
 
 const POLL_ENDPOINTS = [
-  '/bookings',
-  '/rooms?limit=1000',
-  '/housekeeping',
-  '/advance-bookings',
-  '/function-rooms/bookings/with-rooms',
-  '/refunds/cancellable-bookings',
-  '/collections',
-  '/wallet',
+  { label: 'Bookings', path: '/bookings' },
+  { label: 'Rooms', path: '/rooms?limit=1000' },
+  { label: 'Housekeeping', path: '/housekeeping' },
+  { label: 'Advance bookings', path: '/advance-bookings' },
+  { label: 'Function rooms', path: '/function-rooms/bookings/with-rooms' },
+  { label: 'Refunds', path: '/refunds/cancellable-bookings' },
+  { label: 'Collections', path: '/collections' },
 ] as const;
 
-type EndpointStatus = { path: string; status: number | 'error'; ok: boolean };
+type EndpointStatus = {
+  label: string;
+  path: string;
+  status: number | 'error';
+  ok: boolean;
+};
 
 export default function NotificationDiagnostics() {
   const user = getCurrentUser();
@@ -49,21 +53,31 @@ export default function NotificationDiagnostics() {
       const today = localDateStr();
       const statuses: EndpointStatus[] = [];
 
-      for (const path of POLL_ENDPOINTS) {
+      for (const endpoint of POLL_ENDPOINTS) {
         const resolved =
-          path === '/housekeeping'
+          endpoint.path === '/housekeeping'
             ? `/housekeeping?date=${today}`
-            : path === '/collections'
+            : endpoint.path === '/collections'
               ? `/collections?startDate=${today}&endDate=${today}&limit=1`
-              : path;
+              : endpoint.path;
         try {
           const res = await fetch(`${API_URL}${resolved}${resolved.includes('?') ? '&' : '?'}_nc=${Date.now()}`, {
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             cache: 'no-store',
           });
-          statuses.push({ path: resolved, status: res.status, ok: res.ok && res.status !== 304 });
+          statuses.push({
+            label: endpoint.label,
+            path: resolved,
+            status: res.status,
+            ok: res.ok && res.status !== 304,
+          });
         } catch {
-          statuses.push({ path: resolved, status: 'error', ok: false });
+          statuses.push({
+            label: endpoint.label,
+            path: resolved,
+            status: 'error',
+            ok: false,
+          });
         }
       }
       setEndpointStatus(statuses);
@@ -129,7 +143,7 @@ export default function NotificationDiagnostics() {
           Notification diagnostics
         </CardTitle>
         <CardDescription>
-          Check poll APIs and see what the bell should show right now. Poll runs every 30s in the app.
+          Check module data sources and see what the bell should show right now. Poll runs every 30s in the app.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -182,14 +196,14 @@ export default function NotificationDiagnostics() {
 
         {endpointStatus.length > 0 && (
           <div>
-            <p className="text-sm font-medium mb-2">Poll APIs</p>
+            <p className="text-sm font-medium mb-2">Modules</p>
             <div className="space-y-1">
               {endpointStatus.map((ep) => (
                 <div
-                  key={ep.path}
-                  className="flex items-center justify-between gap-2 text-xs rounded border px-2 py-1"
+                  key={ep.label}
+                  className="flex items-center justify-between gap-2 text-sm rounded border px-2.5 py-1.5"
                 >
-                  <span className="truncate font-mono">{ep.path}</span>
+                  <span className="truncate font-medium">{ep.label}</span>
                   <Badge variant={ep.ok ? 'default' : 'destructive'}>
                     {ep.status === 'error' ? 'ERR' : ep.status}
                   </Badge>
