@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { formatGuestsForDisplay } from '@/lib/guestUtils';
+import { formatGuestsForDisplay, getGuestNameGroups } from '@/lib/guestUtils';
 import { cn } from '@/lib/utils';
 import {
   fetchBookingInvoicePdf,
@@ -1099,12 +1099,49 @@ const InvoiceModal = ({
                       <span className="font-medium">{nights} night{nights !== 1 ? 's' : ''}</span>
                     </div>
                     {source === 'database' && databaseInvoice?.booking?.guests && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Guests:</span>
-                        <span className="font-medium flex items-center gap-1">
-                          <Users className="w-4 h-4" /> {formatGuestsForDisplay(databaseInvoice.booking.guests)}
-                        </span>
-                      </div>
+                      <>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground shrink-0">Guests:</span>
+                          <span className="font-medium flex items-center gap-1 text-right">
+                            <Users className="w-4 h-4 shrink-0" />
+                            {formatGuestsForDisplay(databaseInvoice.booking.guests)}
+                          </span>
+                        </div>
+                        {(() => {
+                          const { adultNames, childNames, allNames } = getGuestNameGroups(
+                            databaseInvoice.booking.guests
+                          );
+                          if (allNames.length === 0) return null;
+                          return (
+                            <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5 text-sm">
+                              {adultNames.length > 0 && (
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground shrink-0">Adult names:</span>
+                                  <span className="font-medium text-right break-words">
+                                    {adultNames.join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                              {childNames.length > 0 && (
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground shrink-0">Child names:</span>
+                                  <span className="font-medium text-right break-words">
+                                    {childNames.join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                              {adultNames.length === 0 && childNames.length === 0 && (
+                                <div className="flex justify-between gap-3">
+                                  <span className="text-muted-foreground shrink-0">Guest names:</span>
+                                  <span className="font-medium text-right break-words">
+                                    {allNames.join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </>
                     )}
                   </div>
                 </CardContent>

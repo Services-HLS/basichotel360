@@ -39,6 +39,7 @@ import {
     CreditCard
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { resizeGuestNames } from '@/lib/guestUtils';
 
 interface Room {
     id?: number;
@@ -119,7 +120,7 @@ export default function AdvanceBookingForm({
         customerName: '',
         customerPhone: '',
         customerEmail: '',
-        idType: 'aadhaar' as 'aadhaar' | 'pan' | 'passport' | 'driving' | '',
+        idType: 'aadhaar' as 'aadhaar' | 'pan' | 'passport' | 'driving' | 'voter' | '',
         idNumber: '',
         checkInDate: format(new Date(), 'yyyy-MM-dd'),
         checkInTime: '14:00',
@@ -128,6 +129,7 @@ export default function AdvanceBookingForm({
         adults: 1,
         children: 0,
         guests: 1,
+        guestNames: [''],
         specialRequests: '',
         address: '',
         city: '',
@@ -210,6 +212,10 @@ export default function AdvanceBookingForm({
             } else if (formData.idType === 'driving') {
                 if (idNumberClean.length < 10 || idNumberClean.length > 16) {
                     errors.idNumber = 'Driving license must be 10-16 characters';
+                }
+            } else if (formData.idType === 'voter') {
+                if (!/^[A-Z]{3}[0-9]{7}$/.test(idNumberClean.toUpperCase())) {
+                    errors.idNumber = 'Voter ID must be 3 letters followed by 7 digits (e.g. ABC1234567)';
                 }
             }
         }
@@ -311,6 +317,7 @@ export default function AdvanceBookingForm({
             adults: 1,
             children: 0,
             guests: 1,
+            guestNames: [''],
             specialRequests: '',
             address: '',
             city: '',
@@ -612,6 +619,9 @@ export default function AdvanceBookingForm({
 
     const selectCustomer = (customer: any) => {
         setSelectedCustomer(customer);
+        const total = Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0));
+        const guestNames = resizeGuestNames(formData.guestNames, total, customer.name);
+        guestNames[0] = customer.name || '';
         setFormData({
             ...formData,
             customerName: customer.name,
@@ -624,7 +634,8 @@ export default function AdvanceBookingForm({
             state: customer.state || '',
             pincode: customer.pincode || '',
             customerGstNo: customer.customer_gst_no || '',
-            purposeOfVisit: customer.purpose_of_visit || formData.purposeOfVisit
+            purposeOfVisit: customer.purpose_of_visit || formData.purposeOfVisit,
+            guestNames,
         });
 
         if (customer.id_image || customer.id_image2) {
@@ -775,6 +786,9 @@ export default function AdvanceBookingForm({
                 guests: Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0)),
                 adults: Number(formData.adults) || 1,
                 children: Number(formData.children) || 0,
+                guest_names: (formData.guestNames || [])
+                    .map((n) => String(n || '').trim())
+                    .filter(Boolean),
                 amount: Number(charges.baseAmount) || 0,
                 advance_amount: Number(advanceAmount) || 0,
                 remaining_amount: Number(charges.total - advanceAmount) || 0,
@@ -1124,10 +1138,16 @@ export default function AdvanceBookingForm({
                                             onChange={(e) => {
                                                 const adults = Math.max(1, parseInt(e.target.value, 10) || 1);
                                                 const children = Number(formData.children) || 0;
+                                                const total = adults + children;
                                                 setFormData({
                                                     ...formData,
                                                     adults,
-                                                    guests: adults + children,
+                                                    guests: total,
+                                                    guestNames: resizeGuestNames(
+                                                        formData.guestNames,
+                                                        total,
+                                                        formData.customerName
+                                                    ),
                                                 });
                                             }}
                                         />
@@ -1142,10 +1162,16 @@ export default function AdvanceBookingForm({
                                             onChange={(e) => {
                                                 const children = Math.max(0, parseInt(e.target.value, 10) || 0);
                                                 const adults = Number(formData.adults) || 1;
+                                                const total = adults + children;
                                                 setFormData({
                                                     ...formData,
                                                     children,
-                                                    guests: adults + children,
+                                                    guests: total,
+                                                    guestNames: resizeGuestNames(
+                                                        formData.guestNames,
+                                                        total,
+                                                        formData.customerName
+                                                    ),
                                                 });
                                             }}
                                         />
@@ -1154,6 +1180,57 @@ export default function AdvanceBookingForm({
                                 <p className="text-xs text-muted-foreground">
                                     Total: {Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0))} guest(s)
                                 </p>
+
+                                {Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0)) > 0 && (
+                                    <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                                        <Label className="text-sm font-medium">Guest member names</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Enter name for each guest. Guest 1 is the primary guest.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {Array.from({
+                                                length: Math.max(
+                                                    1,
+                                                    (Number(formData.adults) || 1) + (Number(formData.children) || 0)
+                                                ),
+                                            }).map((_, index) => (
+                                                <div key={`adv-guest-name-${index}`} className="space-y-1">
+                                                    <Label className="text-xs text-muted-foreground">
+                                                        Guest {index + 1}
+                                                        {index === 0 ? ' (Primary)' : ''}
+                                                    </Label>
+                                                    <Input
+                                                        value={formData.guestNames?.[index] || ''}
+                                                        onChange={(e) => {
+                                                            const guestNames = resizeGuestNames(
+                                                                formData.guestNames,
+                                                                Math.max(
+                                                                    1,
+                                                                    (Number(formData.adults) || 1) +
+                                                                        (Number(formData.children) || 0)
+                                                                ),
+                                                                formData.customerName
+                                                            );
+                                                            guestNames[index] = e.target.value;
+                                                            setFormData({
+                                                                ...formData,
+                                                                guestNames,
+                                                                ...(index === 0
+                                                                    ? { customerName: e.target.value }
+                                                                    : {}),
+                                                            });
+                                                        }}
+                                                        placeholder={
+                                                            index === 0
+                                                                ? 'Primary guest name'
+                                                                : `Guest ${index + 1} name`
+                                                        }
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1274,7 +1351,14 @@ export default function AdvanceBookingForm({
                                 <Input
                                     value={formData.customerName}
                                     onChange={e => {
-                                        setFormData({ ...formData, customerName: e.target.value });
+                                        const name = e.target.value;
+                                        const total = Math.max(
+                                            1,
+                                            (Number(formData.adults) || 1) + (Number(formData.children) || 0)
+                                        );
+                                        const guestNames = resizeGuestNames(formData.guestNames, total, name);
+                                        guestNames[0] = name;
+                                        setFormData({ ...formData, customerName: name, guestNames });
                                         clearFieldError('customerName');
                                     }}
                                     placeholder="Enter full name"
@@ -1328,6 +1412,7 @@ export default function AdvanceBookingForm({
                                         <SelectItem value="pan">PAN Card</SelectItem>
                                         <SelectItem value="passport">Passport</SelectItem>
                                         <SelectItem value="driving">Driving License</SelectItem>
+                                        <SelectItem value="voter">Voter Card</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1354,6 +1439,7 @@ export default function AdvanceBookingForm({
                                         {formData.idType === 'pan' && 'PAN: ABCDE1234F format'}
                                         {formData.idType === 'passport' && 'Passport: 8-12 characters'}
                                         {formData.idType === 'driving' && 'Driving License: 10-16 characters'}
+                                        {formData.idType === 'voter' && 'Voter ID: 3 letters + 7 digits (e.g. ABC1234567)'}
                                     </p>
                                 )}
                             </div>

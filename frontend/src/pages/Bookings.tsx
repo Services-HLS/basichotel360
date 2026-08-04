@@ -79,6 +79,7 @@ import { isAdmin } from '@/lib/permissions';
 import { isBasicDatabaseUser } from '@/lib/planUtils';
 import {
   isUpcomingCheckoutBooking,
+  isPendingCheckoutBooking,
   notifyBookingsUpdated,
 } from '@/lib/bookingCheckoutUtils';
 import { notifyRoomNeedsCleaning, removeNotification } from '@/lib/notificationStore';
@@ -125,6 +126,12 @@ interface Booking {
   groupBookingId?: string;
   advance_amount_paid?: number;
   remaining_amount?: number;
+  deposit_amount?: number;
+  deposit_payment_method?: string;
+  deposit_returned?: number;
+  deposit_deducted?: number;
+  deposit_deduction_reason?: string;
+  deposit_status?: string;
   original_amount?: number;
   discount_amount?: number;
   discount_percentage?: number;
@@ -280,6 +287,8 @@ const Bookings = () => {
 
   // View toggle & Checkout state
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  /** Re-render periodically so checkout-soon (1h) rows turn red without refresh */
+  const [checkoutHighlightTick, setCheckoutHighlightTick] = useState(0);
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [checkoutBooking, setCheckoutBooking] = useState<Booking | null>(null);
   const [bookingModalView, setBookingModalView] = useState<'main' | 'edit'>('main');
@@ -300,8 +309,11 @@ const Bookings = () => {
   const [isVerifyingCheckoutPayment, setIsVerifyingCheckoutPayment] = useState(false);
   const [checkoutDiscountType, setCheckoutDiscountType] = useState<'none' | 'percentage' | 'amount'>('none');
   const [checkoutDiscountValue, setCheckoutDiscountValue] = useState(0);
-  const [checkoutActiveTab, setCheckoutActiveTab] = useState<'services' | 'discount' | 'payment'>('services');
+  const [checkoutActiveTab, setCheckoutActiveTab] = useState<'services' | 'discount' | 'payment'>('payment');
   const [checkoutAmountToPay, setCheckoutAmountToPay] = useState(0);
+  const [depositSettleMode, setDepositSettleMode] = useState<'return_full' | 'deduct'>('return_full');
+  const [depositDeductAmount, setDepositDeductAmount] = useState(0);
+  const [depositDeductionReason, setDepositDeductionReason] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   // Function Bookings state
@@ -820,6 +832,12 @@ const Bookings = () => {
           cancellation_reason: booking?.cancellation_reason || null,
           advance_amount_paid: parseAmount(booking.advance_amount_paid || 0),
           remaining_amount: parseAmount(booking.remaining_amount || 0),
+          deposit_amount: parseAmount(booking.deposit_amount || 0),
+          deposit_payment_method: booking.deposit_payment_method || '',
+          deposit_returned: parseAmount(booking.deposit_returned || 0),
+          deposit_deducted: parseAmount(booking.deposit_deducted || 0),
+          deposit_deduction_reason: booking.deposit_deduction_reason || '',
+          deposit_status: booking.deposit_status || 'none',
           original_amount: parseAmount(booking.original_amount || 0),
           discount_amount: parseAmount(booking.discount_amount || 0),
           discount_percentage: parseAmount(booking.discount_percentage || 0),
@@ -1825,10 +1843,17 @@ const Bookings = () => {
     setIsVerifyingCheckoutPayment(false);
     setCheckoutDiscountType('none');
     setCheckoutDiscountValue(0);
-    setCheckoutActiveTab(isBasicDbUser ? 'payment' : 'services');
+    setCheckoutActiveTab('payment');
 
     // Start empty so staff must enter collected amount (error shown if Complete Checkout with balance still due)
     setCheckoutAmountToPay(0);
+    const heldDeposit = parseAmount(booking.deposit_amount || 0);
+    setDepositSettleMode('return_full');
+    setDepositDeductAmount(0);
+    setDepositDeductionReason('');
+    if (heldDeposit > 0 && booking.deposit_status === 'held') {
+      setDepositSettleMode('return_full');
+    }
     setBookingModalView('main');
     setCheckoutModalOpen(true);
   };
@@ -2227,6 +2252,44 @@ const Bookings = () => {
       return;
     }
 
+    const heldDeposit = parseAmount(checkoutBooking.deposit_amount || 0);
+    const depositStillHeld =
+      heldDeposit > 0.01 &&
+      (checkoutBooking.deposit_status === 'held' || !checkoutBooking.deposit_status || checkoutBooking.deposit_status === 'none');
+    let depositReturned = 0;
+    let depositDeducted = 0;
+    let depositStatus = checkoutBooking.deposit_status || 'none';
+    let depositReason = '';
+
+    if (depositStillHeld && heldDeposit > 0.01) {
+      if (depositSettleMode === 'return_full') {
+        depositReturned = heldDeposit;
+        depositDeducted = 0;
+        depositStatus = 'returned';
+      } else {
+        depositDeducted = Math.min(heldDeposit, Math.max(0, depositDeductAmount));
+        depositReturned = Math.max(0, heldDeposit - depositDeducted);
+        if (depositDeducted <= 0) {
+          toast({
+            title: 'Enter deduction amount',
+            description: 'Enter how much to deduct from the deposit, or choose Full Return.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        if (!depositDeductionReason.trim()) {
+          toast({
+            title: 'Reason required',
+            description: 'Enter why deposit amount is being deducted (damage, missing items, etc.).',
+            variant: 'destructive',
+          });
+          return;
+        }
+        depositStatus = depositReturned > 0.01 ? 'partially_returned' : 'deducted';
+        depositReason = depositDeductionReason.trim();
+      }
+    }
+
     setIsCheckingOut(true);
 
     try {
@@ -2265,6 +2328,15 @@ const Bookings = () => {
         ? 'no balance due (paid at booking)'
         : `paid ₹${checkoutAmountToPay.toFixed(2)}${upiAppLabel ? ` via ${upiAppLabel}` : ''}`;
 
+      let depositNote = '';
+      if (depositStillHeld && heldDeposit > 0.01) {
+        if (depositStatus === 'returned') {
+          depositNote = `; Deposit returned: ₹${depositReturned.toFixed(2)}`;
+        } else {
+          depositNote = `; Deposit deducted: ₹${depositDeducted.toFixed(2)}${depositReason ? ` (${depositReason})` : ''}; returned: ₹${depositReturned.toFixed(2)}`;
+        }
+      }
+
       const updates: any = {
         status: 'completed',
         actual_checkout_date: formatDateForInput(new Date().toISOString()),
@@ -2289,9 +2361,16 @@ const Bookings = () => {
         advance_amount_paid: totalPaid,
         remaining_amount: newRemaining,
         special_requests: checkoutBooking.special_requests 
-          ? `${checkoutBooking.special_requests}\nCheckout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
-          : `Checkout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}`.trim()
+          ? `${checkoutBooking.special_requests}\nCheckout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}${depositNote}`.trim()
+          : `Checkout: ${checkoutPaymentNote}${serviceDescription ? `; Add-ons: ${serviceDescription}` : ''}${depositNote}`.trim()
       };
+
+      if (depositStillHeld && heldDeposit > 0.01) {
+        updates.deposit_returned = depositReturned;
+        updates.deposit_deducted = depositDeducted;
+        updates.deposit_deduction_reason = depositReason || null;
+        updates.deposit_status = depositStatus;
+      }
 
       const success = await updateBooking(checkoutBooking.bookingId, updates);
       if (success) {
@@ -2655,6 +2734,12 @@ const Bookings = () => {
       if ((updates as any).original_amount !== undefined) backendUpdates.original_amount = (updates as any).original_amount;
       if ((updates as any).advance_amount_paid !== undefined) backendUpdates.advance_amount_paid = (updates as any).advance_amount_paid;
       if ((updates as any).remaining_amount !== undefined) backendUpdates.remaining_amount = (updates as any).remaining_amount;
+      if ((updates as any).deposit_returned !== undefined) backendUpdates.deposit_returned = (updates as any).deposit_returned;
+      if ((updates as any).deposit_deducted !== undefined) backendUpdates.deposit_deducted = (updates as any).deposit_deducted;
+      if ((updates as any).deposit_deduction_reason !== undefined) {
+        backendUpdates.deposit_deduction_reason = (updates as any).deposit_deduction_reason;
+      }
+      if ((updates as any).deposit_status !== undefined) backendUpdates.deposit_status = (updates as any).deposit_status;
       if (updates.special_requests !== undefined) backendUpdates.special_requests = updates.special_requests;
       if ((updates as any).actual_checkout_date !== undefined) backendUpdates.actual_checkout_date = (updates as any).actual_checkout_date;
       if ((updates as any).actual_checkout_time !== undefined) backendUpdates.actual_checkout_time = (updates as any).actual_checkout_time;
@@ -3376,17 +3461,17 @@ const Bookings = () => {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; label: string; icon?: any; className?: string }> = {
       booked: { variant: 'default', label: 'Booked' },
-      pending_checkout: {
-        variant: 'outline',
-        label: 'Pending Checkout',
-        icon: AlertCircle,
-        className: 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-100',
-      },
       checkout_soon: {
         variant: 'outline',
         label: 'Checkout Soon',
         icon: AlertCircle,
-        className: 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100',
+        className: 'bg-red-100 text-red-800 border-red-300 hover:bg-red-100',
+      },
+      pending_checkout: {
+        variant: 'outline',
+        label: 'Checkout Overdue',
+        icon: AlertCircle,
+        className: 'bg-red-200 text-red-900 border-red-400 hover:bg-red-200',
       },
       blocked: {
         variant: 'destructive',
@@ -3419,6 +3504,9 @@ const Bookings = () => {
   };
 
   const getBookingStatusBadge = (booking: Booking) => {
+    if (isPendingCheckoutBooking(booking)) {
+      return getStatusBadge('pending_checkout');
+    }
     if (isUpcomingCheckoutBooking(booking)) {
       return getStatusBadge('checkout_soon');
     }
@@ -3459,7 +3547,7 @@ const Bookings = () => {
 
   const upcomingCheckoutCount = useMemo(
     () => bookings.filter((b) => isUpcomingCheckoutBooking(b)).length,
-    [bookings]
+    [bookings, checkoutHighlightTick]
   );
 
   const applyDateFilter = (bookings: Booking[]) => {
@@ -3622,6 +3710,14 @@ const Bookings = () => {
     }, 60_000);
     return () => window.clearInterval(interval);
   }, [bookings, userSource]);
+
+  // Re-check 1h checkout window every 30s so rows turn red without a full refresh
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setCheckoutHighlightTick((t) => t + 1);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const handleRefresh = async () => {
     await fetchBookings(true);
@@ -4283,7 +4379,12 @@ const Bookings = () => {
           <span className="text-[11px] text-muted-foreground truncate">
             Rm {params.row.roomNumber}
             {params.row.groupBookingId && ' · Group'}
-            {isUpcomingCheckoutBooking(params.row) && ' · Soon'}
+            {isUpcomingCheckoutBooking(params.row) && (
+              <span className="text-red-700 font-semibold"> · Soon (1h)</span>
+            )}
+            {isPendingCheckoutBooking(params.row) && (
+              <span className="text-red-800 font-semibold"> · Overdue</span>
+            )}
           </span>
           <span className="text-[10px] text-muted-foreground truncate">
             {params.row.customerPhone || '—'}
@@ -5261,7 +5362,7 @@ const Bookings = () => {
                           duration: 3000,
                         });
                       }}
-                      className={`flex items-center gap-1 h-8 px-3 text-xs ${selectedStatus === 'checkout_soon' ? 'bg-amber-50 border-amber-200 text-amber-700' : ''}`}
+                      className={`flex items-center gap-1 h-8 px-3 text-xs ${selectedStatus === 'checkout_soon' ? 'bg-red-100 border-red-300 text-red-800' : 'border-red-200 text-red-700 hover:bg-red-50'}`}
                     >
                       <AlertCircle className="w-3 h-3" />
                       Checkout Soon ({upcomingCheckoutCount})
@@ -5499,24 +5600,31 @@ const Bookings = () => {
                           <tbody>
                             {filteredBookings.map((booking) => {
                               const checkoutSoon = isUpcomingCheckoutBooking(booking);
+                              const checkoutOverdue = isPendingCheckoutBooking(booking);
+                              const highlightCheckout = checkoutSoon || checkoutOverdue;
                               return (
                               <tr
                                 key={`${booking.source}-${booking.bookingId}`}
                                 data-booking-id={booking.bookingId}
-                                className={`border-b last:border-0 hover:bg-muted/40 transition-colors ${checkoutSoon ? 'bg-amber-50/60' : ''}`}
+                                className={`border-b last:border-0 transition-colors ${
+                                  highlightCheckout
+                                    ? 'bg-red-100 hover:bg-red-200/80 border-l-4 border-l-red-600 text-red-950'
+                                    : 'hover:bg-muted/40'
+                                }`}
                               >
                                 <td className="p-2 align-middle min-w-[140px]">
                                   <div
-                                    className="font-medium text-foreground text-sm leading-tight truncate"
+                                    className={`font-medium text-sm leading-tight truncate ${highlightCheckout ? 'text-red-900' : 'text-foreground'}`}
                                     title={booking.customerName}
                                   >
                                     {booking.customerName}
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                                  <div className={`text-[10px] leading-snug mt-0.5 ${highlightCheckout ? 'text-red-800/80' : 'text-muted-foreground'}`}>
                                     <div className="truncate">
                                       Rm {booking.roomNumber}
                                       {booking.groupBookingId ? ' · Grp' : ''}
-                                      {checkoutSoon ? ' · Soon' : ''}
+                                      {checkoutSoon ? ' · Soon (1h)' : ''}
+                                      {checkoutOverdue ? ' · Overdue' : ''}
                                     </div>
                                     <div className="truncate">
                                       {booking.customerPhone || '—'}
@@ -5550,7 +5658,7 @@ const Bookings = () => {
                                     )}
                                   </Button>
                                 </td>
-                                <td className="p-2 align-middle text-xs">
+                                <td className={`p-2 align-middle text-xs ${highlightCheckout ? 'font-semibold text-red-800' : ''}`}>
                                   {renderPlannedAndActualCheckout(booking)}
                                 </td>
                               </tr>
@@ -5573,9 +5681,18 @@ const Bookings = () => {
                           const balanceDue = booking.remaining_amount != null && booking.remaining_amount >= 0
                             ? parseAmount(booking.remaining_amount)
                             : Math.max(0, totalAmt - advancePaid);
+                          const highlightCheckout =
+                            isUpcomingCheckoutBooking(booking) || isPendingCheckoutBooking(booking);
 
                           return (
-                            <Card key={`${booking.source}-${booking.bookingId}`} className="shadow hover:shadow-md transition-shadow duration-200 border-l-4 border-l-primary flex flex-col justify-between">
+                            <Card
+                              key={`${booking.source}-${booking.bookingId}`}
+                              className={`shadow hover:shadow-md transition-shadow duration-200 border-l-4 flex flex-col justify-between ${
+                                highlightCheckout
+                                  ? 'border-l-red-600 bg-red-50 border-red-200'
+                                  : 'border-l-primary'
+                              }`}
+                            >
                               <CardHeader className="pb-2">
                                 <div className="flex justify-between items-start">
                                   <div>
@@ -7626,6 +7743,92 @@ const Bookings = () => {
                           <span>₹{checkoutTotals.balanceDue.toLocaleString('en-IN')}</span>
                         </div>
                       </>
+                    )}
+
+                    {parseAmount(checkoutBooking.deposit_amount || 0) > 0 && (
+                      <div className="border-t pt-2 mt-2 space-y-2">
+                        <div className="flex justify-between text-blue-800 font-medium">
+                          <span>Security Deposit Held:</span>
+                          <span>₹{parseAmount(checkoutBooking.deposit_amount).toLocaleString('en-IN')}</span>
+                        </div>
+                        {(checkoutBooking.deposit_status === 'held' ||
+                          !checkoutBooking.deposit_status ||
+                          checkoutBooking.deposit_status === 'none') && (
+                          <div className="rounded-md border border-blue-200 bg-blue-50/60 p-2 space-y-2">
+                            <Label className="text-xs font-semibold text-blue-900">Deposit settlement</Label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={depositSettleMode === 'return_full' ? 'default' : 'outline'}
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                  setDepositSettleMode('return_full');
+                                  setDepositDeductAmount(0);
+                                  setDepositDeductionReason('');
+                                }}
+                              >
+                                Full return
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={depositSettleMode === 'deduct' ? 'default' : 'outline'}
+                                className="h-8 text-xs"
+                                onClick={() => setDepositSettleMode('deduct')}
+                              >
+                                Deduct amount
+                              </Button>
+                            </div>
+                            {depositSettleMode === 'deduct' && (
+                              <div className="space-y-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Deduct (₹)</Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={parseAmount(checkoutBooking.deposit_amount)}
+                                    step="1"
+                                    value={depositDeductAmount || ''}
+                                    onChange={(e) =>
+                                      setDepositDeductAmount(Math.max(0, parseFloat(e.target.value) || 0))
+                                    }
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Reason *</Label>
+                                  <Input
+                                    value={depositDeductionReason}
+                                    onChange={(e) => setDepositDeductionReason(e.target.value)}
+                                    placeholder="Damage / missing items / extra cleaning"
+                                    className="h-8"
+                                  />
+                                </div>
+                                <p className="text-[11px] text-blue-900">
+                                  Return to guest:{' '}
+                                  <strong>
+                                    ₹
+                                    {Math.max(
+                                      0,
+                                      parseAmount(checkoutBooking.deposit_amount) -
+                                        Math.min(
+                                          parseAmount(checkoutBooking.deposit_amount),
+                                          depositDeductAmount
+                                        )
+                                    ).toLocaleString('en-IN')}
+                                  </strong>
+                                </p>
+                              </div>
+                            )}
+                            {depositSettleMode === 'return_full' && (
+                              <p className="text-[11px] text-green-800">
+                                Full deposit ₹{parseAmount(checkoutBooking.deposit_amount).toLocaleString('en-IN')} will be returned to guest.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {checkoutAmountToPay > 0 && (

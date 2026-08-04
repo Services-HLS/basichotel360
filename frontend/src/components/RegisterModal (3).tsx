@@ -792,7 +792,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
       if (data.success) {
         let message = '';
         if (formData.plan === 'pro') {
-          message = `${autoHotelName} has been registered with PRO Plan (30-day FREE trial). Your default password is your phone number.`;
+          message = `${autoHotelName} has been registered with PRO Plan (15-day FREE trial). Your default password is your phone number.`;
         } else {
           message = `${autoHotelName} is now on FREE Plan. Your default password is your phone number. You can login now.`;
         }
@@ -917,7 +917,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
       { text: "POS optional integration", included: true },
       { text: "WhatsApp & call support", included: true },
       { text: "Go live in less than 1 hour", included: true },
-      { text: "30-day FREE trial, then ₹999 / 6 months", included: true }
+      { text: "15-day FREE trial, then ₹999 / 6 months", included: true }
     ],
     enterprise: [
       { text: "Chain-level PMS & coordination", included: true },
@@ -956,7 +956,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
       id: "pro",
       name: "PRO",
       subtitle: "Boutique / 20–70 Rooms",
-      price: "30-day FREE trial",
+      price: "15-day FREE trial",
       color: "border-blue-500",
       buttonVariant: "default" as const,
       available: true,
@@ -1135,7 +1135,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
                                 <div className="space-y-3">
                                   <div className="flex items-center text-sm font-medium">
                                     <Calendar className="h-4 w-4 mr-2 text-blue-600 bg-blue-100 p-0.5 rounded-sm" />
-                                    <span>30-day FREE trial</span>
+                                    <span>15-day FREE trial</span>
                                   </div>
                                   <div className="flex items-center text-sm font-medium">
                                     <Phone className="h-4 w-4 mr-2 text-blue-600 bg-blue-100 p-0.5 rounded-sm" />
@@ -1158,7 +1158,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
                                     plan.id === "pro" ?
                                       <div className="bg-gradient-to-r from-amber-50 to-orange-100 border border-amber-200 rounded-lg px-4 py-2 shadow-sm">
                                         <span className="text-sm sm:text-base font-bold text-amber-700 tracking-wide uppercase">
-                                          ✨ 30 Days FREE ✨
+                                          ✨ 15 Days FREE ✨
                                         </span>
                                       </div> :
                                       <div className="bg-gradient-to-r from-purple-50 to-pink-100 border border-purple-200 rounded-lg px-4 py-2 shadow-sm">
@@ -1297,7 +1297,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
                       <div className="flex items-start gap-2">
                         <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
                         <div>
-                          <strong>PRO Plan Trial:</strong> You'll get 30 days FREE trial.
+                          <strong>PRO Plan Trial:</strong> You'll get 15 days FREE trial.
                         </div>
                       </div>
                     </AlertDescription>
@@ -1513,7 +1513,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
                 </div>
               ) : formData.plan === 'pro' ? (
                 <div className="space-y-1">
-                  <div className="font-semibold">PRO Plan - 30 Day FREE Trial</div>
+                  <div className="font-semibold">PRO Plan - 15 Day FREE Trial</div>
                   <div>Phone verification required.</div>
                   {emailOTPVerified && (
                     <div className="text-green-600 font-medium">

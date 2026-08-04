@@ -6,8 +6,8 @@ const customerQueries = {
     hotel_id, name, phone, email, customer_number, id_type, id_number,
     id_image, id_image2, payment_method, payment_status,
     payment_reference, transaction_id, address, city, state, pincode,
-    customer_gst_no, purpose_of_visit, other_expenses, expense_description
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    company_name, customer_gst_no, purpose_of_visit, other_expenses, expense_description
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
   // Create customer basic
   CREATE_CUSTOMER_BASIC: `INSERT INTO customers (
@@ -25,7 +25,7 @@ const customerQueries = {
     name = ?, phone = ?, email = ?, customer_number = ?, id_type = ?, id_number = ?,
     id_image = ?, id_image2 = ?, payment_method = ?, payment_status = ?,
     payment_reference = ?, transaction_id = ?, address = ?, city = ?, 
-    state = ?, pincode = ?, customer_gst_no = ?, purpose_of_visit = ?, 
+    state = ?, pincode = ?, company_name = ?, customer_gst_no = ?, purpose_of_visit = ?, 
     other_expenses = ?, expense_description = ?
     WHERE id = ? AND hotel_id = ?`,
 
@@ -63,7 +63,7 @@ const customerQueries = {
   GET_CUSTOMER_WITH_IMAGES: `
     SELECT id, name, phone, email, customer_number, id_type, id_number, 
            id_image, id_image2, created_at, address, city, state, pincode,
-           customer_gst_no, purpose_of_visit, other_expenses, expense_description,
+           company_name, customer_gst_no, purpose_of_visit, other_expenses, expense_description,
            payment_method, payment_status, payment_reference, transaction_id
     FROM customers 
     WHERE id = ? AND hotel_id = ?

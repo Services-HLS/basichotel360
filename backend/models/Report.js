@@ -314,6 +314,37 @@ const { pool } = require("../config/database");
 const exceljs = require("exceljs");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
+const {
+  formatGuestsForDisplay,
+  getGuestNameGroups,
+} = require("../utils/guestUtils");
+
+function formatPoliceGuestMembers(guestsValue) {
+  const { adultNames, childNames, allNames } = getGuestNameGroups(guestsValue);
+  if (allNames.length === 0) {
+    return {
+      guest_members: "",
+      guest_members_line: "",
+      adults_line: "",
+      children_line: "",
+      guests_summary: formatGuestsForDisplay(guestsValue),
+    };
+  }
+  const adults_line = adultNames.length
+    ? `Adults: ${adultNames.join(", ")}`
+    : "";
+  const children_line = childNames.length
+    ? `Children: ${childNames.join(", ")}`
+    : "";
+  const guest_members_line = [adults_line, children_line].filter(Boolean).join(" | ");
+  return {
+    guest_members: allNames.join(", "),
+    guest_members_line,
+    adults_line,
+    children_line,
+    guests_summary: formatGuestsForDisplay(guestsValue),
+  };
+}
 
 class Report {
   // Generate Daily Occupancy Report
@@ -1217,7 +1248,8 @@ class Report {
       COALESCE(c.id_type, 'Not Provided') as guest_id_type,
       COALESCE(c.id_number, 'Not Provided') as guest_id_no,
       r.room_number,
-      c.phone as mobile_no
+      c.phone as mobile_no,
+      b.guests as guests_raw
     FROM bookings b
     JOIN rooms r ON b.room_id = r.id
     LEFT JOIN customers c ON b.customer_id = c.id
@@ -1245,7 +1277,14 @@ class Report {
       endDate,
     ]);
 
-    return rows;
+    return rows.map((row) => {
+      const members = formatPoliceGuestMembers(row.guests_raw);
+      const { guests_raw, ...rest } = row;
+      return {
+        ...rest,
+        ...members,
+      };
+    });
   }
 
   // For PDF generation - SIMPLIFIED
@@ -1474,9 +1513,15 @@ class Report {
       }
 
       // Row data
+      const guestCellLines = [
+        row.guest_name || "N/A",
+        row.adults_line || "",
+        row.children_line || "",
+        (row.address || "N/A").substring(0, 45),
+      ].filter(Boolean);
       const rowCells = [
         `${index + 1}\n${row.book_no || ""}`,
-        `${row.guest_name || "N/A"}\n${(row.address || "N/A").substring(0, 40)}`,
+        guestCellLines.join("\n"),
         formatDate(row.check_in_date),
         formatDate(row.departure_date),
         `${row.purpose_of_visit || "N/A"}\n${row.transport_mode || "NS"}`,
@@ -1486,26 +1531,26 @@ class Report {
 
       // Draw row
       x = tableLeft;
+      const cellHeight = Math.max(30, guestCellLines.length * 10 + 8);
       columns.forEach((col, colIndex) => {
-        const cellHeight = 30;
         doc.rect(x, y, col.width, cellHeight).stroke();
 
         const lines = rowCells[colIndex].split("\n");
-        let lineY = y + 5;
+        let lineY = y + 4;
 
-        lines.forEach((line, lineIndex) => {
+        lines.forEach((line) => {
           doc.text(line, x + 2, lineY, {
             width: col.width - 4,
             align: col.align,
             lineGap: 1,
           });
-          lineY += 10;
+          lineY += 9;
         });
 
         x += col.width;
       });
 
-      y += 30;
+      y += cellHeight;
     });
 
     // Footer

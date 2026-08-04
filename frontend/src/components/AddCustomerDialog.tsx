@@ -635,7 +635,9 @@ const AddCustomerDialog = ({ onCustomerAdded }: AddCustomerDialogProps) => {
                         <SelectContent>
                             <SelectItem value="aadhaar">Aadhaar Card</SelectItem>
                             <SelectItem value="pan">PAN Card</SelectItem>
-                            <SelectItem value="passort">Passport</SelectItem>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="driving">Driving License</SelectItem>
+                            <SelectItem value="voter">Voter Card</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

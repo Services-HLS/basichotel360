@@ -6860,6 +6860,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
     plan: ""
   });
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [usernameCopied, setUsernameCopied] = useState(false);
 
   // Add state for checking duplicates
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
@@ -7480,9 +7481,17 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
         setShowPhoneOTPInput(false);
         toast({
           title: "Phone Verified Successfully! ✅",
-          description: "Your phone has been verified for PRO plan",
+          description: "Creating your PRO plan account...",
           variant: "default",
         });
+
+        // After OTP verification, complete registration and show success popup
+        const isDuplicate = await checkDuplicateUser(formData.username, formData.phone);
+        if (isDuplicate) {
+          setShowDuplicatePopup(true);
+          return;
+        }
+        await completeRegistration();
       } else {
         throw new Error(data.message || "Invalid OTP");
       }
@@ -7736,13 +7745,14 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       }
 
       if (data.success) {
+        const registeredPlan = formData.plan;
         // Save registration data for welcome screen
         setRegisteredData({
           hotelName: autoHotelName,
           username: formData.username.trim(),
           password: autoPassword,
           phone: formatIndianPhone(cleanPhone),
-          plan: formData.plan
+          plan: registeredPlan
         });
 
         // Reset form
@@ -7772,8 +7782,17 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
         setShowPhoneOTPInput(false);
         setShowOtpInput(false);
         setBasicOtp("");
-        setBasicOtpVerified(false);
         setShowBasicOtpInput(false);
+
+        toast({
+          title: registeredPlan === "pro"
+            ? "PRO Plan Created Successfully! 🎉"
+            : "Registration Successful! 🎉",
+          description: registeredPlan === "pro"
+            ? "Your PRO plan is active for 15 days. Save your username and password from the popup."
+            : "Your account has been created. Save your login details from the popup.",
+          variant: "default",
+        });
 
         // Close registration modal and show welcome screen
         setShowWelcomeScreen(true);
@@ -7844,7 +7863,18 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
     }
   };
 
-  // Handle copy password to clipboard
+  // Handle copy username / password to clipboard
+  const copyUsernameToClipboard = () => {
+    navigator.clipboard.writeText(registeredData.username);
+    setUsernameCopied(true);
+    setTimeout(() => setUsernameCopied(false), 3000);
+    toast({
+      title: "Username Copied!",
+      description: "Username has been copied to clipboard",
+      variant: "default",
+    });
+  };
+
   const copyPasswordToClipboard = () => {
     navigator.clipboard.writeText(registeredData.password);
     setPasswordCopied(true);
@@ -7904,7 +7934,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       { text: "POS optional integration", included: true },
       { text: "WhatsApp & call support", included: true },
       { text: "Go live in less than 1 hour", included: true },
-      { text: "30-day FREE trial, then ₹999 / 6 months", included: true }
+      { text: "15-day FREE trial, then ₹999 / 6 months", included: true }
     ],
     enterprise: [
       { text: "Chain-level PMS & coordination", included: true },
@@ -7943,7 +7973,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       id: "pro",
       name: "PRO",
       subtitle: "Boutique / 20–70 Rooms",
-      price: "30-day FREE trial",
+      price: "15-day FREE trial",
       color: "border-blue-500",
       buttonVariant: "default" as const,
       available: true,
@@ -8100,9 +8130,9 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
     </Dialog>
   );
 
-  // Welcome Screen Component - Optimized for Responsive Design
+  // Welcome Screen Component - Compact so title + credentials + buttons all fit on screen
   const WelcomeScreen = () => (
-    <DialogContent className="max-w-[95vw] sm:max-w-md mx-auto p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
+    <DialogContent className="max-w-[95vw] sm:max-w-md mx-auto p-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90vh] flex flex-col">
       <style>{`
         @keyframes gradientShift {
           0% { background-position: 0% 50%; }
@@ -8114,224 +8144,173 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
           background-size: 300% 300%;
           animation: gradientShift 8s ease infinite;
         }
-        @keyframes pulseSlow {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.05); opacity: 0.9; }
-        }
-        .animate-pulse-slow {
-          animation: pulseSlow 3s ease-in-out infinite;
-        }
-        @keyframes confetti {
-          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-        }
-        .confetti {
-          position: absolute;
-          width: 8px;
-          height: 8px;
-          background: var(--color);
-          top: -10px;
-          border-radius: 0;
-          animation: confetti 3s ease-in-out infinite;
-        }
-        @media (max-width: 640px) {
-          .confetti {
-            width: 5px;
-            height: 5px;
-          }
-        }
       `}</style>
 
-      <div className="relative min-h-[500px] sm:min-h-[600px]">
-        {/* Animated gradient background */}
+      <div className="relative flex flex-col max-h-[90vh] overflow-y-auto">
         <div className="absolute inset-0 animate-gradient-shift"></div>
 
-        {/* Confetti effect - fewer on mobile */}
-        {/* {[...Array(window.innerWidth < 640 ? 10 : 20)].map((_, i) => (
-          <div
-            key={i}
-            className="confetti"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 2}s`,
-              backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`,
-              width: `${Math.random() * (window.innerWidth < 640 ? 6 : 10) + 3}px`,
-              height: `${Math.random() * (window.innerWidth < 640 ? 6 : 10) + 3}px`,
-              transform: `rotate(${Math.random() * 360}deg)`,
-            }}
-          />
-        ))} */}
-        {(() => {
-          // Safely check if window is defined (for SSR compatibility)
-          const isClient = typeof window !== 'undefined';
-          const width = isClient ? window.innerWidth : 1024; // Default to desktop size
-          const confettiCount = width < 640 ? 10 : 20;
-
-          return [...Array(confettiCount)].map((_, i) => (
-            <div
-              key={i}
-              className="confetti"
-              style={{
-                left: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`,
-                width: `${Math.random() * (width < 640 ? 6 : 10) + 3}px`,
-                height: `${Math.random() * (width < 640 ? 6 : 10) + 3}px`,
-                transform: `rotate(${Math.random() * 360}deg)`,
-              }}
-            />
-          ));
-        })()}
-
-        {/* Content */}
-        <div className="relative z-10 p-4 sm:p-8 text-white flex flex-col min-h-[500px] sm:min-h-[600px]">
-          {/* Success animation */}
-          <div className="flex justify-center mb-4 sm:mb-6">
+        <div className="relative z-10 p-4 sm:p-5 text-white flex flex-col">
+          {/* Compact success icon */}
+          <div className="flex justify-center mb-2 sm:mb-3">
             <div className="relative">
-              <div className="w-20 h-20 sm:w-28 sm:h-28 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center animate-pulse-slow">
-                <div className="w-16 h-16 sm:w-24 sm:h-24 bg-white rounded-full flex items-center justify-center shadow-xl">
-                  <PartyPopper className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-600" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
+                  <PartyPopper className="h-6 w-6 sm:h-7 sm:w-7 text-emerald-600" />
                 </div>
               </div>
-              <div className="absolute -top-2 -right-2">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-400 rounded-full flex items-center justify-center text-xl sm:text-2xl animate-bounce shadow-lg">
-                  🎉
-                </div>
-              </div>
+              <div className="absolute -top-1 -right-1 text-lg sm:text-xl">🎉</div>
             </div>
           </div>
 
-          <DialogTitle className="text-xl sm:text-3xl font-bold text-center mb-1 sm:mb-2 text-white drop-shadow-lg">
-            Welcome to {registeredData.hotelName}!
+          <DialogTitle className="text-lg sm:text-2xl font-bold text-center mb-1 text-white drop-shadow-lg leading-tight px-1">
+            {registeredData.plan === 'pro'
+              ? 'PRO Plan Created Successfully!'
+              : `Welcome to ${registeredData.hotelName}!`}
           </DialogTitle>
 
-          <DialogDescription className="text-center text-white/90 text-sm sm:text-lg mb-4 sm:mb-8 drop-shadow px-2">
-            Your account has been created successfully
+          <DialogDescription className="text-center text-white/90 text-xs sm:text-sm mb-3 drop-shadow px-1">
+            {registeredData.plan === 'pro'
+              ? 'Your PRO plan is ready with a 15-day FREE trial. Please save your login details below.'
+              : 'Your account has been created successfully'}
           </DialogDescription>
 
           {/* Credentials Card */}
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 sm:p-6 mb-3 sm:mb-6 border border-white/20 shadow-xl">
-            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2 text-white">
-              <Key className="h-4 w-4 sm:h-5 sm:w-5" />
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 sm:p-4 mb-3 border border-white/20 shadow-xl">
+            {registeredData.plan === 'pro' && (
+              <div className="mb-2 sm:mb-3 rounded-lg bg-amber-400/25 border border-amber-300/40 px-2.5 py-1.5 text-center">
+                <p className="text-xs sm:text-sm font-bold text-white">
+                  ⭐ PRO Plan — 15 Days FREE Trial
+                </p>
+                <p className="text-[10px] sm:text-xs text-white/85 mt-0.5">
+                  Trial starts now. After trial ends, subscription is ₹999/6 months.
+                </p>
+              </div>
+            )}
+
+            <h3 className="text-sm sm:text-base font-semibold mb-2 flex items-center gap-2 text-white">
+              <Key className="h-4 w-4" />
               Your Login Credentials
             </h3>
 
-            <div className="space-y-2 sm:space-y-4">
+            <div className="space-y-2">
               {/* Username */}
-              <div className="flex items-start gap-2 sm:gap-3">
-                <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg shrink-0">
-                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              <div className="flex items-start gap-2 rounded-lg bg-black/20 p-2">
+                <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+                  <User className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-white/70">Username</p>
-                  <p className="font-mono font-bold text-sm sm:text-lg text-white break-all">
-                    {registeredData.username}
-                  </p>
-                </div>
-              </div>
-
-              {/* Password */}
-              <div className="flex items-start gap-2 sm:gap-3">
-                <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg shrink-0">
-                  <Key className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-white/70">Password</p>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <p className="font-mono font-bold text-sm sm:text-lg flex-1 text-white break-all">
-                      {registeredData.password}
+                  <p className="text-[10px] sm:text-xs text-white/70">Username</p>
+                  <div className="flex items-center gap-1">
+                    <p className="font-mono font-bold text-sm sm:text-base flex-1 text-white break-all">
+                      {registeredData.username}
                     </p>
                     <Button
                       type="button"
                       size="sm"
                       variant="secondary"
-                      className="bg-white/20 hover:bg-white/30 text-white border-0 transition-all shrink-0 h-7 sm:h-8 px-2 sm:px-3"
-                      onClick={copyPasswordToClipboard}
+                      className="bg-white/20 hover:bg-white/30 text-white border-0 shrink-0 h-7 px-2"
+                      onClick={copyUsernameToClipboard}
                     >
-                      {passwordCopied ? (
-                        <CheckCheck className="h-3 w-3 sm:h-4 sm:w-4" />
+                      {usernameCopied ? (
+                        <CheckCheck className="h-3.5 w-3.5" />
                       ) : (
-                        <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <Copy className="h-3.5 w-3.5" />
                       )}
                     </Button>
                   </div>
                 </div>
               </div>
 
-              {/* Phone */}
-              <div className="flex items-start gap-2 sm:gap-3">
-                <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg shrink-0">
-                  <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              {/* Password */}
+              <div className="flex items-start gap-2 rounded-lg bg-black/20 p-2">
+                <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+                  <Key className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-white/70">Registered Phone</p>
-                  <p className="font-mono font-bold text-sm sm:text-lg text-white break-all">
+                  <p className="text-[10px] sm:text-xs text-white/70">Password</p>
+                  <div className="flex items-center gap-1">
+                    <p className="font-mono font-bold text-sm sm:text-base flex-1 text-white break-all">
+                      {registeredData.password}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="bg-white/20 hover:bg-white/30 text-white border-0 shrink-0 h-7 px-2"
+                      onClick={copyPasswordToClipboard}
+                    >
+                      {passwordCopied ? (
+                        <CheckCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                  {registeredData.plan === 'pro' && (
+                    <p className="text-[10px] text-white/70 mt-0.5">
+                      Default password is your phone number
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Phone + Plan in one compact row group */}
+              <div className="flex items-start gap-2 p-1.5">
+                <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+                  <Phone className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] sm:text-xs text-white/70">Registered Phone</p>
+                  <p className="font-mono font-bold text-sm text-white break-all">
                     {registeredData.phone}
                   </p>
                 </div>
               </div>
 
-              {/* Plan */}
-              <div className="flex items-start gap-2 sm:gap-3">
-                <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg shrink-0">
-                  <Hotel className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              <div className="flex items-start gap-2 p-1.5">
+                <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+                  <Hotel className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm text-white/70">Plan</p>
-                  <p className="font-bold text-sm sm:text-lg text-white">
-                    {registeredData.plan === 'pro' ? (
-                      <span className="inline-flex items-center gap-1">
-                        ⭐ PRO Plan (30-day FREE trial)
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1">
-                        🆓 BASIC Plan (Lifetime Free)
-                      </span>
-                    )}
+                  <p className="text-[10px] sm:text-xs text-white/70">Plan</p>
+                  <p className="font-bold text-sm text-white">
+                    {registeredData.plan === 'pro'
+                      ? '⭐ PRO Plan (15-day FREE trial)'
+                      : '🆓 BASIC Plan (Lifetime Free)'}
                   </p>
                 </div>
               </div>
             </div>
-
-            {/* Trial Alert */}
-            {registeredData.plan === 'pro' && (
-              <Alert className="mt-3 sm:mt-4 bg-yellow-400/20 border-yellow-400/30 text-white p-2 sm:p-3">
-                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-2 shrink-0" />
-                <AlertDescription className="text-xs sm:text-sm">
-                  Your 30-day FREE trial starts now. After trial ends, subscription is ₹999/6 months.
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
 
           {/* Important Note */}
-          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-3 sm:p-4 mb-3 sm:mb-6 text-xs sm:text-sm text-white/90 border border-white/10">
-            <p className="font-semibold mb-1 sm:mb-2 flex items-center gap-2">
-              <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4" />
+          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-2.5 sm:p-3 mb-3 text-xs text-white/90 border border-white/10">
+            <p className="font-semibold mb-1 flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" />
               Important:
             </p>
-            <ul className="list-disc list-inside space-y-0.5 sm:space-y-1 text-white/80 text-xs sm:text-sm">
+            <ul className="list-disc list-inside space-y-0.5 text-white/80 text-[11px] sm:text-xs">
               <li>Save your password - you won't see it again</li>
               <li>You can change password after login in Settings</li>
               <li>Use your username and password to login</li>
             </ul>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-2 sm:gap-3 mt-auto">
+          {/* Action Buttons - always visible */}
+          <div className="flex flex-col gap-2 pb-1">
             <Button
               size="lg"
-              className="w-full bg-white text-emerald-700 hover:bg-white/90 font-bold text-sm sm:text-lg py-4 sm:py-6 shadow-xl transform transition-all hover:scale-105"
+              className="w-full bg-white text-emerald-700 hover:bg-white/90 font-bold text-sm sm:text-base py-5 shadow-xl"
               onClick={handleProceedToLogin}
             >
-              <LogIn className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+              <LogIn className="h-4 w-4 mr-2" />
               Proceed to Login
             </Button>
 
             <Button
               variant="outline"
               size="lg"
-              className="w-full border-white/30 text-white hover:bg-white/10 font-medium backdrop-blur-sm text-sm sm:text-base py-3 sm:py-4"
+              className="w-full border-white/30 text-white hover:bg-white/10 font-medium text-sm py-4"
               onClick={() => {
                 setShowWelcomeScreen(false);
                 onClose();
@@ -8473,7 +8452,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                                   <div className="space-y-2 sm:space-y-3">
                                     <div className="flex items-center text-xs sm:text-sm font-medium">
                                       <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-blue-600 bg-blue-100 p-0.5 rounded-sm" />
-                                      <span>30-day FREE trial</span>
+                                      <span>15-day FREE trial</span>
                                     </div>
                                     <div className="flex items-center text-xs sm:text-sm font-medium">
                                       <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-blue-600 bg-blue-100 p-0.5 rounded-sm" />
@@ -8496,7 +8475,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                                       plan.id === "pro" ?
                                         <div className="bg-gradient-to-r from-amber-50 to-orange-100 border border-amber-200 rounded-lg px-2 sm:px-4 py-1 sm:py-2 shadow-sm">
                                           <span className="text-xs sm:text-base font-bold text-amber-700 tracking-wide uppercase">
-                                            ✨ 30 Days FREE ✨
+                                            ✨ 15 Days FREE ✨
                                           </span>
                                         </div> :
                                         <div className="bg-gradient-to-r from-purple-50 to-pink-100 border border-purple-200 rounded-lg px-2 sm:px-4 py-1 sm:py-2 shadow-sm">
@@ -8565,7 +8544,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                 )}
                 {initialView === "form" && formData.plan === "pro" && (
                   <p className="text-xs sm:text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <strong>PRO:</strong> Full hotel system with 30-day free trial. Phone OTP required to register.
+                    <strong>PRO:</strong> Full hotel system with 15-day free trial. Phone OTP required to register.
                   </p>
                 )}
               </div>
@@ -8785,7 +8764,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                         <div className="flex items-start gap-2">
                           <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
                           <div className="text-xs sm:text-sm">
-                            <strong>PRO Plan Trial:</strong> You'll get 30 days FREE trial.
+                            <strong>PRO Plan Trial:</strong> You'll get 15 days FREE trial.
                           </div>
                         </div>
                       </AlertDescription>
@@ -9007,7 +8986,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                   </div>
                 ) : formData.plan === 'pro' ? (
                   <div className="space-y-1">
-                    <div className="font-semibold">PRO Plan - 30 Day FREE Trial</div>
+                    <div className="font-semibold">PRO Plan - 15 Day FREE Trial</div>
                     <div className="text-xs">Phone verification required. Password is your phone number.</div>
                     {phoneOTPVerified && (
                       <div className="text-green-600 font-medium text-xs">

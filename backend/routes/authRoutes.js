@@ -435,13 +435,14 @@ router.post('/refresh-token', async (req, res) => {
     }
 
     // Check if trial expired for pro users
+    const { PRO_TRIAL_DAYS } = require('../utils/proTrial');
     const isProPlan = user.plan === 'pro' || user.hotel_plan === 'pro';
     if (isProPlan && user.status === 'pending') {
-      // Check trial period (30 days)
+      // Prefer hotel.trial_expiry_date when available; fallback to created_at + PRO_TRIAL_DAYS
       const createdAt = new Date(user.created_at || user.createdAt);
       const daysSinceCreation = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
       
-      if (daysSinceCreation > 30) {
+      if (daysSinceCreation > PRO_TRIAL_DAYS) {
         console.log('❌ Trial expired for user:', userId);
         return res.status(403).json({ 
           success: false, 
@@ -456,7 +457,7 @@ router.post('/refresh-token', async (req, res) => {
     if (isProPlan && user.status === 'pending') {
       const createdAt = new Date(user.created_at || user.createdAt);
       const daysSinceCreation = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
-      trialDaysLeft = Math.max(0, 30 - daysSinceCreation);
+      trialDaysLeft = Math.max(0, PRO_TRIAL_DAYS - daysSinceCreation);
     }
 
     // Generate new token

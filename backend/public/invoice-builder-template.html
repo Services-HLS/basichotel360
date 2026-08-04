@@ -907,6 +907,15 @@ tr.removable .remove-btn{right:4px;top:50%;transform:translateY(-50%);}
             </div>
           </div>
 
+          <!-- GUEST MEMBERS (all adult / child names) -->
+          <div class="inv-section removable" id="guest-members-section" style="position:relative; display:__SHOW_GUEST_MEMBERS__;">
+            <div class="sec-title" contenteditable="true">Guest Members</div>
+            <div class="cell-value" style="padding: 0.4rem 2.2rem 1rem; font-size: 12.5px; line-height: 1.6;" contenteditable="true" id="f-guest-members">
+              __GUEST_MEMBERS_HTML__
+            </div>
+            <button class="remove-btn" style="right:-22px;top:12px;transform:none;" onclick="this.parentElement.remove()">×</button>
+          </div>
+
           <!-- SECTION 1: ROOM - USING PLACEHOLDER FOR ROWS -->
           <div class="inv-section removable" id="section-0" style="position:relative;">
             <div class="sec-title" contenteditable="true">Room Charges</div>

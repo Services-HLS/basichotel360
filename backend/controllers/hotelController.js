@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const WhatsAppService = require('../services/whatsappService');
 const { pool } = require('../config/database');
 const { normalizeHotelPlan, isBasicHotelPlan } = require('../utils/planUtils');
+const { PRO_TRIAL_DAYS, getProTrialExpiryDate } = require('../utils/proTrial');
 
 const hotelController = {
 
@@ -385,8 +386,7 @@ const hotelController = {
       let userStatus = admin.status || 'active';
 
       if (dbPlan === 'pro') {
-        trialExpiryDate = new Date();
-        trialExpiryDate.setDate(trialExpiryDate.getDate() + 30); // 30 days trial
+        trialExpiryDate = getProTrialExpiryDate(); // 15-day PRO trial
         userStatus = 'pending'; // PRO users start as pending
       } else if (isBasicHotelPlan(dbPlan)) {
         userStatus = 'active';
@@ -426,7 +426,7 @@ const hotelController = {
           plan: dbPlan,
           adminName: admin.name,
           adminEmail: admin.email,
-          trialDays: dbPlan === 'pro' ? 30 : null,
+          trialDays: dbPlan === 'pro' ? PRO_TRIAL_DAYS : null,
           trialExpiryDate: trialExpiryDate
         });
       } catch (emailError) {
@@ -436,7 +436,7 @@ const hotelController = {
       res.status(201).json({
         success: true,
         message: dbPlan === 'pro'
-          ? `Hotel registered successfully with PRO plan (30-day trial)`
+          ? `Hotel registered successfully with PRO plan (${PRO_TRIAL_DAYS}-day trial)`
           : `Hotel registered successfully with BASIC (base) plan`,
         data: {
           hotelId: hotelId,

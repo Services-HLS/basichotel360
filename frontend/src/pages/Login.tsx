@@ -2066,7 +2066,7 @@ const DatabaseLoginForm = () => {
           setShowPendingModal(false); // Don't show pending modal
           toast({
             title: "Trial Expired",
-            description: data.message || "Your 30-day trial has expired. Please upgrade to continue.",
+            description: data.message || "Your 15-day trial has expired. Please upgrade to continue.",
             variant: "destructive",
           });
           setIsLoading(false);
@@ -2143,7 +2143,7 @@ const DatabaseLoginForm = () => {
 
       // Show welcome message based on trial status
       if (isProPlan && isPendingStatus) {
-        const daysLeft = data.user.trialInfo?.daysLeft || 30;
+        const daysLeft = data.user.trialInfo?.daysLeft || 15;
         toast({
           title: "PRO Trial Active! 🎉",
           description: `Welcome to PRO plan! You have ${daysLeft} days left in your trial.`,

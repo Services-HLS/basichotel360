@@ -136,7 +136,7 @@ const authenticate = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           error: 'TRIAL_EXPIRED',
-          message: 'Your 30-day PRO plan trial has expired. Please upgrade to continue.',
+          message: 'Your PRO plan trial has expired. Please upgrade to continue.',
           status: 'suspended',
           plan: hotel.plan,
           requiresUpgrade: true,

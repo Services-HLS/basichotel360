@@ -21,9 +21,10 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row items-center gap-6">
 
             {/* Navigation Links */}
-            <div className="flex gap-4">
-              <Link to="#" className="hover:text-cyan-200 transition-colors">Privacy</Link>
-              <Link to="#" className="hover:text-cyan-200 transition-colors">Terms & Conditions</Link>
+            <div className="flex gap-4 flex-wrap justify-center">
+              <Link to="/privacy" className="hover:text-cyan-200 transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-cyan-200 transition-colors">Terms & Conditions</Link>
+              <Link to="/refund-policy" className="hover:text-cyan-200 transition-colors">Refund Policy</Link>
             </div>
 
             {/* Designed By Section with Logo */}

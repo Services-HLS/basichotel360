@@ -385,6 +385,12 @@ class Booking {
     addField('original_amount', bookingData.original_amount, true);
     addField('advance_amount_paid', bookingData.advance_amount_paid, true);
     addField('remaining_amount', bookingData.remaining_amount, true);
+    addField('deposit_amount', bookingData.deposit_amount, true);
+    addField('deposit_payment_method', bookingData.deposit_payment_method);
+    addField('deposit_returned', bookingData.deposit_returned, true);
+    addField('deposit_deducted', bookingData.deposit_deducted, true);
+    addField('deposit_deduction_reason', bookingData.deposit_deduction_reason);
+    addField('deposit_status', bookingData.deposit_status);
 
     if (updates.length === 0) {
       console.log('No fields to update');

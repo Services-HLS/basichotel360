@@ -1755,6 +1755,7 @@ export default function MultiRoomBookingForm({
                       <SelectItem value="pan">PAN Card</SelectItem>
                       <SelectItem value="passport">Passport</SelectItem>
                       <SelectItem value="driving">Driving License</SelectItem>
+                      <SelectItem value="voter">Voter Card</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

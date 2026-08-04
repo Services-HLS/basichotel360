@@ -3821,7 +3821,7 @@ const Dashboard = () => {
                   <AlertTriangle className="w-8 h-8 text-red-600" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 mb-1">Trial Period Ended</h2>
-                <p className="text-gray-600 text-sm">Your 30-day PRO trial has expired</p>
+                <p className="text-gray-600 text-sm">Your 15-day PRO trial has expired</p>
               </div>
 
               {/* Trial Details - Compact */}
@@ -4027,11 +4027,11 @@ const Dashboard = () => {
                     : 'text-blue-600'
                   }`}>
                   {trialInfo.status === 'expired' ? (
-                    <>Your 30-day PRO trial has ended. Please make payment to reactivate your account.</>
+                    <>Your 15-day PRO trial has ended. Please make payment to reactivate your account.</>
                   ) : trialInfo.status === 'warning' ? (
                     <>Your PRO trial ends in {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''}. Upgrade now to avoid interruption.</>
                   ) : (
-                    <>You're on a 30-day PRO trial. {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} remaining.</>
+                    <>You're on a PRO trial. {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} remaining.</>
                   )}
                 </p>
 

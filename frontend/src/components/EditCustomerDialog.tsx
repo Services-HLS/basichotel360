@@ -209,13 +209,14 @@ const EditCustomerDialog = ({
                       <SelectItem value="pan">PAN Card</SelectItem>
                       <SelectItem value="passport">Passport</SelectItem>
                       <SelectItem value="driving">Driving License</SelectItem>
+                      <SelectItem value="voter">Voter Card</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* ID Number */}
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="idNumber">ID Number (Aadhaar/PAN/Passport)</Label>
+                  <Label htmlFor="idNumber">ID Number (Aadhaar/PAN/Passport/Voter)</Label>
                   <Input
                     id="idNumber"
                     name="idNumber"

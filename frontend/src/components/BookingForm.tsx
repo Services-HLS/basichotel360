@@ -3661,6 +3661,7 @@ import {
   formatBookingPaymentLabel,
   type UpiPaymentAppId,
 } from '@/lib/upiPaymentApps';
+import { parseGuests, resizeGuestNames } from '@/lib/guestUtils';
 
 interface DateRange {
   from: Date | undefined;
@@ -4185,6 +4186,11 @@ export default function BookingForm({
   // Advance payment at booking time (regular bookings)
   const [recordAdvancePayment, setRecordAdvancePayment] = useState(false);
   const [advanceAmountPaid, setAdvanceAmountPaid] = useState(0);
+  /** Security deposit held at booking; settled at checkout */
+  const [recordDeposit, setRecordDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [depositOnlinePaymentApp, setDepositOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
   const [advancePaymentMethodAtBooking, setAdvancePaymentMethodAtBooking] = useState<'cash' | 'online'>('cash');
   const [advanceOnlinePaymentApp, setAdvanceOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
   const [onlinePaymentApp, setOnlinePaymentApp] = useState<UpiPaymentAppId | ''>('');
@@ -4202,7 +4208,7 @@ export default function BookingForm({
     customerName: '',
     customerPhone: '',
     customerEmail: '',
-    idType: 'aadhaar' as 'pan' | 'aadhaar' | 'passport' | 'driving',
+    idType: 'aadhaar' as 'pan' | 'aadhaar' | 'passport' | 'driving' | 'voter',
     idNumber: '',
     checkInDate: initialCheckInDate,
     checkInTime: defaultCheckInTimeForDate(initialCheckInDate),
@@ -4211,11 +4217,13 @@ export default function BookingForm({
     adults: 1,
     children: 0,
     guests: 1,
+    guestNames: [''],
     specialRequests: '',
     address: '',
     city: '',
     state: '',
     pincode: '',
+    companyName: '',
     customerGstNo: '',
     purposeOfVisit: '',
     otherExpenses: 0,
@@ -4539,15 +4547,24 @@ export default function BookingForm({
       const fromTime = advanceData.from_time || advanceData.fromTime || advanceData.checkInTime || '14:00';
       const toTime = advanceData.to_time || advanceData.toTime || advanceData.checkOutTime || '12:00';
 
-      const guests = advanceData.guests || 1;
-      const adults = Number(advanceData.adults) || guests || 1;
-      const children = Number(advanceData.children) || 0;
+      const guestsRaw = advanceData.guests || 1;
+      const parsedGuests = parseGuests(guestsRaw);
+      const adults =
+        Number(advanceData.adults) || parsedGuests.adults || parsedGuests.total || 1;
+      const children = Number(advanceData.children) || parsedGuests.children || 0;
+      const totalGuests = Math.max(1, adults + children);
+      const guestNames = resizeGuestNames(
+        advanceData.guest_names || advanceData.guestNames || parsedGuests.names,
+        totalGuests,
+        customerName
+      );
       const specialRequests = advanceData.special_requests || advanceData.specialRequests || '';
 
       const address = advanceData.address || '';
       const city = advanceData.city || '';
       const state = advanceData.state || '';
       const pincode = advanceData.pincode || '';
+      const companyName = advanceData.company_name || advanceData.companyName || '';
       const customerGstNo = advanceData.customer_gst_no || advanceData.customerGstNo || '';
       const purposeOfVisit = advanceData.purpose_of_visit || advanceData.purposeOfVisit || '';
 
@@ -4568,12 +4585,14 @@ export default function BookingForm({
         checkOutTime: toTime,
         adults,
         children,
-        guests: adults + children,
+        guests: totalGuests,
+        guestNames,
         specialRequests: specialRequests,
         address: address,
         city: city,
         state: state,
         pincode: pincode,
+        companyName: companyName,
         customerGstNo: customerGstNo,
         purposeOfVisit: purposeOfVisit,
         otherExpenses: otherExpenses,
@@ -4728,6 +4747,18 @@ export default function BookingForm({
   const getTotalGuests = () =>
     Math.max(1, (Number(formData.adults) || 1) + (Number(formData.children) || 0));
 
+  const handleGuestNameChange = (index: number, value: string) => {
+    setFormData((prev) => {
+      const guestNames = [...(prev.guestNames || [])];
+      guestNames[index] = value;
+      const next = { ...prev, guestNames };
+      if (index === 0) {
+        next.customerName = value;
+      }
+      return next;
+    });
+  };
+
   const handleChange = (field: string, value: string | number) => {
     if (field === 'idNumber' && typeof value === 'string') {
       let maxLength = 16;
@@ -4750,12 +4781,27 @@ export default function BookingForm({
           field === 'adults' ? Math.max(1, num || 1) : Number(prev.adults) || 1;
         const children =
           field === 'children' ? num : Number(prev.children) || 0;
+        const total = Math.max(1, adults + children);
         return {
           ...prev,
           adults,
           children,
-          guests: Math.max(1, adults + children),
+          guests: total,
+          guestNames: resizeGuestNames(prev.guestNames, total, prev.customerName),
         };
+      });
+      return;
+    }
+
+    if (field === 'customerName' && typeof value === 'string') {
+      setFormData((prev) => {
+        const guestNames = resizeGuestNames(
+          prev.guestNames,
+          Math.max(1, (Number(prev.adults) || 1) + (Number(prev.children) || 0)),
+          value
+        );
+        guestNames[0] = value;
+        return { ...prev, customerName: value, guestNames };
       });
       return;
     }
@@ -5116,6 +5162,17 @@ export default function BookingForm({
         }
         break;
 
+      case 'voter':
+        // EPIC / Voter ID: typically 3 letters + 7 digits (e.g. ABC1234567)
+        const voterRegex = /^[A-Z]{3}[0-9]{7}$/;
+        if (!voterRegex.test(cleanId)) {
+          return {
+            isValid: false,
+            message: 'Voter ID must be 3 letters followed by 7 digits (e.g. ABC1234567)'
+          };
+        }
+        break;
+
       default:
         return { isValid: true, message: '' };
     }
@@ -5178,6 +5235,24 @@ export default function BookingForm({
             toast({
               title: 'Select UPI app',
               description: 'Choose which online app was used for the advance payment',
+              variant: 'destructive'
+            });
+            return false;
+          }
+        }
+        if (!isAdvanceConversion && recordDeposit) {
+          if (depositAmount <= 0) {
+            toast({
+              title: 'Deposit amount required',
+              description: 'Enter the security deposit collected from the guest',
+              variant: 'destructive'
+            });
+            return false;
+          }
+          if (depositPaymentMethod === 'online' && !depositOnlinePaymentApp) {
+            toast({
+              title: 'Select UPI app',
+              description: 'Choose which online app was used for the deposit',
               variant: 'destructive'
             });
             return false;
@@ -5452,6 +5527,9 @@ export default function BookingForm({
           guests: getTotalGuests(),
           adults: Number(formData.adults) || 1,
           children: Number(formData.children) || 0,
+          guest_names: (formData.guestNames || [])
+            .map((n) => String(n || '').trim())
+            .filter(Boolean),
           special_requests: specialRequestsWithAdvance,
           referral_by: formData.referralBy,
           referral_amount: formData.referralAmount,
@@ -5459,6 +5537,7 @@ export default function BookingForm({
           city: formData.city || '',
           state: formData.state || '',
           pincode: formData.pincode || '',
+          company_name: formData.companyName || '',
           customer_gst_no: formData.customerGstNo || '',
           purpose_of_visit: formData.purposeOfVisit || '',
           other_expenses: formData.otherExpenses || 0,
@@ -5473,6 +5552,10 @@ export default function BookingForm({
           discount_type: discountType,
           advance_amount_paid: advancePaid,
           remaining_amount: remainingAmount,
+          deposit_amount: recordDeposit && depositAmount > 0 ? depositAmount : 0,
+          deposit_payment_method:
+            recordDeposit && depositAmount > 0 ? depositPaymentMethod : undefined,
+          deposit_status: recordDeposit && depositAmount > 0 ? 'held' : 'none',
           advance_payment_method:
             recordAdvancePayment && advancePaid > 0
               ? advancePaymentMethodAtBooking
@@ -5481,6 +5564,10 @@ export default function BookingForm({
         advance_booking_id: advanceBookingData?.id || null,
         advance_amount_paid: advancePaid,
         remaining_amount: remainingAmount,
+        deposit_amount: recordDeposit && depositAmount > 0 ? depositAmount : 0,
+        deposit_payment_method:
+          recordDeposit && depositAmount > 0 ? depositPaymentMethod : undefined,
+        deposit_status: recordDeposit && depositAmount > 0 ? 'held' : 'none',
         advance_payment_method:
           recordAdvancePayment && advancePaid > 0
             ? advancePaymentMethodAtBooking
@@ -5513,9 +5600,16 @@ export default function BookingForm({
       if (result.success) {
         toast({
           title: "✅ Booking Confirmed",
-          description: advancePaid > 0
-            ? `Room ${room.number} booked! Advance paid: ₹${advancePaid.toFixed(2)}, Balance: ₹${remainingAmount.toFixed(2)}`
-            : `Room ${room.number} booked successfully!`,
+          description: (() => {
+            const parts = [`Room ${room.number} booked successfully!`];
+            if (advancePaid > 0) {
+              parts.push(`Advance: ₹${advancePaid.toFixed(2)}, Balance: ₹${remainingAmount.toFixed(2)}`);
+            }
+            if (recordDeposit && depositAmount > 0) {
+              parts.push(`Deposit held: ₹${depositAmount.toFixed(2)}`);
+            }
+            return parts.join(' ');
+          })(),
           variant: "default"
         });
 
@@ -5603,22 +5697,30 @@ export default function BookingForm({
       return images;
     });
 
-    setFormData((prev) => ({
-      ...prev,
-      customerName: customer.name || '',
-      customerPhone: customer.phone || '',
-      customerEmail: customer.email || '',
-      idType: (customer.id_type || customer.idType || 'aadhaar') as 'pan' | 'aadhaar' | 'passport' | 'driving',
-      idNumber: customer.id_number || customer.idNumber || '',
-      address: customer.address || '',
-      city: customer.city || '',
-      state: customer.state || '',
-      pincode: customer.pincode || '',
-      customerGstNo: customer.customer_gst_no || '',
-      purposeOfVisit: customer.purpose_of_visit || '',
-      otherExpenses: customer.other_expenses || 0,
-      expenseDescription: customer.expense_description || '',
-    }));
+    setFormData((prev) => {
+      const name = customer.name || '';
+      const total = Math.max(1, (Number(prev.adults) || 1) + (Number(prev.children) || 0));
+      const guestNames = resizeGuestNames(prev.guestNames, total, name);
+      guestNames[0] = name;
+      return {
+        ...prev,
+        customerName: name,
+        customerPhone: customer.phone || '',
+        customerEmail: customer.email || '',
+        idType: (customer.id_type || customer.idType || 'aadhaar') as 'pan' | 'aadhaar' | 'passport' | 'driving' | 'voter',
+        idNumber: customer.id_number || customer.idNumber || '',
+        address: customer.address || '',
+        city: customer.city || '',
+        state: customer.state || '',
+        pincode: customer.pincode || '',
+        companyName: customer.company_name || customer.companyName || '',
+        customerGstNo: customer.customer_gst_no || '',
+        purposeOfVisit: customer.purpose_of_visit || '',
+        otherExpenses: customer.other_expenses || 0,
+        expenseDescription: customer.expense_description || '',
+        guestNames,
+      };
+    });
     setShowCustomerSearch(false);
     setFoundCustomers([]);
   };
@@ -6293,6 +6395,7 @@ export default function BookingForm({
                           <SelectItem value="pan">PAN Card</SelectItem>
                           <SelectItem value="passport">Passport</SelectItem>
                           <SelectItem value="driving">Driving License</SelectItem>
+                          <SelectItem value="voter">Voter Card</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -6312,13 +6415,15 @@ export default function BookingForm({
                             formData.idType === 'pan' ? 'ABCDE1234F' :
                               formData.idType === 'aadhaar' ? '123456789012' :
                                 formData.idType === 'passport' ? 'A1234567' :
-                                  'Enter ID number'
+                                  formData.idType === 'voter' ? 'ABC1234567' :
+                                    'Enter ID number'
                           }
                           maxLength={
                             formData.idType === 'aadhaar' ? 12 :
                               formData.idType === 'pan' ? 10 :
                                 formData.idType === 'passport' ? 8 :
-                                  16
+                                  formData.idType === 'voter' ? 10 :
+                                    16
                           }
                           className={`h-10 ${idValidationError ? 'border-red-500 pr-10' : ''}`}
                         />
@@ -6344,6 +6449,7 @@ export default function BookingForm({
                           {formData.idType === 'aadhaar' && 'Format: 12 digits (e.g., 123456789012)'}
                           {formData.idType === 'passport' && 'Format: 1 letter + 7 digits (e.g., A1234567)'}
                           {formData.idType === 'driving' && 'Format: 8-16 alphanumeric characters'}
+                          {formData.idType === 'voter' && 'Format: 3 letters + 7 digits (e.g., ABC1234567)'}
                         </p>
                       )}
                     </div>
@@ -6414,6 +6520,45 @@ export default function BookingForm({
                           ? ` (${formData.adults} adult${formData.adults !== 1 ? 's' : ''}, ${formData.children} child${formData.children !== 1 ? 'ren' : ''})`
                           : ''}
                       </p>
+
+                      {getTotalGuests() > 0 && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                          <Label className="text-sm font-medium">
+                            Guest member names
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Enter name for each guest ({getTotalGuests()} people). Guest 1 is the primary guest.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {Array.from({ length: getTotalGuests() }).map((_, index) => (
+                              <div key={`guest-name-${index}`} className="space-y-1">
+                                <Label
+                                  htmlFor={`guestName-${index}`}
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  Guest {index + 1}
+                                  {index === 0 ? ' (Primary)' : ''}
+                                  {index > 0 && index < (Number(formData.adults) || 1)
+                                    ? ' — Adult'
+                                    : ''}
+                                  {index >= (Number(formData.adults) || 1) ? ' — Child' : ''}
+                                </Label>
+                                <Input
+                                  id={`guestName-${index}`}
+                                  value={formData.guestNames?.[index] || ''}
+                                  onChange={(e) => handleGuestNameChange(index, e.target.value)}
+                                  placeholder={
+                                    index === 0
+                                      ? 'Primary guest name'
+                                      : `Guest ${index + 1} name`
+                                  }
+                                  className="h-10"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -6444,6 +6589,16 @@ export default function BookingForm({
 
                       <CollapsibleContent className="space-y-4 mt-2">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="companyName">Company Name</Label>
+                            <Input
+                              id="companyName"
+                              value={formData.companyName}
+                              onChange={e => handleChange('companyName', e.target.value)}
+                              placeholder="Company / organization name (optional)"
+                            />
+                          </div>
+
                           <div className="space-y-2">
                             <Label htmlFor="address">Address</Label>
                             <Textarea
@@ -6608,8 +6763,17 @@ export default function BookingForm({
                     <Alert className="bg-muted/40 border-muted">
                       <FileImage className="h-4 w-4" />
                       <AlertDescription className="text-xs text-muted-foreground">
-                        Please upload clear images of your {formData.idType === 'pan' ? 'PAN Card' : 'Aadhaar Card'}.
-                        Upload front and back side if applicable.
+                        Please upload clear images of your{' '}
+                        {formData.idType === 'pan'
+                          ? 'PAN Card'
+                          : formData.idType === 'passport'
+                            ? 'Passport'
+                            : formData.idType === 'driving'
+                              ? 'Driving License'
+                              : formData.idType === 'voter'
+                                ? 'Voter Card'
+                                : 'Aadhaar Card'}
+                        . Upload front and back side if applicable.
                       </AlertDescription>
                     </Alert>
 
@@ -7277,6 +7441,102 @@ export default function BookingForm({
               </div>
             )}
 
+            {/* ========== SECURITY DEPOSIT (optional at booking) ========== */}
+            {!isAdvanceConversion && (
+              <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">Security deposit</span>
+                    <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-blue-100/80">Optional</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="recordDeposit" className="text-sm cursor-pointer">
+                      Collect deposit?
+                    </Label>
+                    <input
+                      type="checkbox"
+                      id="recordDeposit"
+                      checked={recordDeposit}
+                      onChange={(e) => {
+                        setRecordDeposit(e.target.checked);
+                        if (!e.target.checked) {
+                          setDepositAmount(0);
+                          setDepositOnlinePaymentApp('');
+                        }
+                      }}
+                      className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Held separately from room charges. Returned at checkout if all items are OK, or partly deducted for damages/missing items.
+                </p>
+
+                {recordDeposit && (
+                  <div className="space-y-3 pt-2 border-t border-blue-200/60">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="depositAmount" className="text-xs">Deposit amount (₹) *</Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                          <Input
+                            id="depositAmount"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={depositAmount || ''}
+                            onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 1000"
+                            className="pl-7"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Method</Label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <Button
+                            type="button"
+                            variant={depositPaymentMethod === 'cash' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              setDepositPaymentMethod('cash');
+                              setDepositOnlinePaymentApp('');
+                            }}
+                          >
+                            <Wallet className="h-4 w-4 mr-1" />
+                            Cash
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={depositPaymentMethod === 'online' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => setDepositPaymentMethod('online')}
+                          >
+                            <QrCode className="h-4 w-4 mr-1" />
+                            Online
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    {depositPaymentMethod === 'online' && (
+                      <UpiAppSelector
+                        value={depositOnlinePaymentApp}
+                        onChange={setDepositOnlinePaymentApp}
+                        className="rounded-lg border border-blue-200 bg-white p-3"
+                      />
+                    )}
+                    {depositAmount > 0 && (
+                      <div className="rounded-lg bg-white border border-blue-200 p-3 text-sm text-blue-900">
+                        Deposit to hold: <strong>₹{depositAmount.toFixed(2)}</strong> (not part of room bill)
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {isAdvanceConversion && advanceBookingData && totalAdvancePaid > 0 && (
               <div className="border rounded-lg p-4 bg-purple-50 border-purple-200 text-sm space-y-2">
                 <h4 className="font-semibold text-purple-800">Advance from Advance Booking</h4>
@@ -7384,6 +7644,13 @@ export default function BookingForm({
                   </>
                 )}
 
+                {recordDeposit && depositAmount > 0 && (
+                  <div className="flex justify-between text-blue-700 border-t pt-2 mt-2">
+                    <span>Security Deposit (held):</span>
+                    <span className="font-bold">₹{depositAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
                 <div className="border-t pt-2 mt-1">
                   <div className="flex justify-between font-bold text-base">
                     <span>Total</span>
@@ -7484,6 +7751,30 @@ export default function BookingForm({
                       <span className="font-bold text-orange-600 text-lg">₹{balanceDue.toFixed(2)}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {!isAdvanceConversion && recordDeposit && depositAmount > 0 && (
+              <div className="border rounded-lg p-3 bg-blue-50 border-blue-200 text-sm">
+                <h4 className="font-semibold text-blue-900 flex items-center gap-2 mb-2 text-sm">
+                  <Wallet className="h-4 w-4" />
+                  Security Deposit
+                </h4>
+                <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 sm:gap-3">
+                  <div>
+                    <span className="text-blue-700">Deposit Held:</span>
+                    <span className="font-bold text-blue-900 ml-2">₹{depositAmount.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Method:</span>
+                    <span className="font-medium ml-2">
+                      {formatBookingPaymentLabel(depositPaymentMethod, depositOnlinePaymentApp)}
+                    </span>
+                  </div>
+                  <p className="col-span-2 text-xs text-blue-800">
+                    Not part of the room bill. Return or deduct at checkout.
+                  </p>
                 </div>
               </div>
             )}

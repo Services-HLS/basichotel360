@@ -649,6 +649,20 @@ const Reports = () => {
                                 </TableCell>
                                 <TableCell>
                                     <div className="font-medium">{item.guest_name || 'N/A'}</div>
+                                    {item.adults_line && (
+                                        <div className="text-xs text-foreground/80">{item.adults_line}</div>
+                                    )}
+                                    {item.children_line && (
+                                        <div className="text-xs text-foreground/80">{item.children_line}</div>
+                                    )}
+                                    {!item.adults_line && !item.children_line && item.guest_members && (
+                                        <div className="text-xs text-foreground/80">
+                                            Members: {item.guest_members}
+                                        </div>
+                                    )}
+                                    {item.guests_summary && item.guest_members && (
+                                        <div className="text-[10px] text-muted-foreground">{item.guests_summary}</div>
+                                    )}
                                     <div className="text-xs text-gray-600">{item.address || 'N/A'}</div>
                                 </TableCell>
                                 <TableCell className="text-center">{item.check_in_date || 'N/A'}</TableCell>

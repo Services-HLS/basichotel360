@@ -515,7 +515,10 @@ const Layout = ({ children }: LayoutProps) => {
     ) {
       return true;
     }
-    if (isBasicDbUser && (item.path === '/settings' || item.path === '/contact')) {
+    if (
+      isBasicDbUser &&
+      (item.path === '/settings' || item.path === '/contact')
+    ) {
       return true;
     }
 

@@ -1254,7 +1254,8 @@ const formatIdType = (type: string): string => {
     aadhaar: 'Aadhaar',
     pan: 'PAN',
     passport: 'Passport',
-    driving: 'Driving License'
+    driving: 'Driving License',
+    voter: 'Voter Card'
   };
   return types[type] || type;
 };

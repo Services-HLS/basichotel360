@@ -104,7 +104,7 @@ export default function MultiAdvanceBookingForm({
         customerName: '',
         customerPhone: '',
         customerEmail: '',
-        idType: 'aadhaar' as 'aadhaar' | 'pan' | 'passport' | 'driving',
+        idType: 'aadhaar' as 'aadhaar' | 'pan' | 'passport' | 'driving' | 'voter',
         idNumber: '',
         address: '',
         city: '',
@@ -1169,6 +1169,7 @@ export default function MultiAdvanceBookingForm({
                                         <SelectItem value="pan">PAN Card</SelectItem>
                                         <SelectItem value="passport">Passport</SelectItem>
                                         <SelectItem value="driving">Driving License</SelectItem>
+                                        <SelectItem value="voter">Voter Card</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

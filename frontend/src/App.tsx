@@ -491,6 +491,9 @@ import ForgotPassword from "@/components/ForgotPassword";
 import ResetPassword from "@/components/ResetPassword";
 import AdvanceBookings from "./pages/AdvanceBookings";
 import RefundManagement from './pages/RefundManagement';
+import RefundPolicy from './pages/RefundPolicy';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsAndConditions from './pages/TermsAndConditions';
 import { TrackingProvider } from "./context/TrackingContext";
 import { initNotificationServices } from '@/lib/notificationInit';
 import { setupApiInterceptor } from '@/lib/apiInterceptor';
@@ -628,6 +631,24 @@ const App = () => {
               <Route path="/refund-management" element={
                 <AuthProtectedRoute requiredPermission="view_dashboard">
                   <RefundManagement />
+                </AuthProtectedRoute>
+              } />
+
+              <Route path="/refund-policy" element={
+                <AuthProtectedRoute requiredPermission="view_dashboard">
+                  <RefundPolicy />
+                </AuthProtectedRoute>
+              } />
+
+              <Route path="/privacy" element={
+                <AuthProtectedRoute requiredPermission="view_dashboard">
+                  <PrivacyPolicy />
+                </AuthProtectedRoute>
+              } />
+
+              <Route path="/terms" element={
+                <AuthProtectedRoute requiredPermission="view_dashboard">
+                  <TermsAndConditions />
                 </AuthProtectedRoute>
               } />
 

@@ -395,7 +395,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
             <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0;">
               <h4 style="color: #1565c0; margin-top: 0;">✨ PRO Plan Benefits</h4>
               <ul style="margin: 10px 0; padding-left: 20px;">
-                <li><strong>30-day FREE trial</strong> - All features unlocked</li>
+                <li><strong>15-day FREE trial</strong> - All features unlocked</li>
                 <li>Unlimited bookings and customer records</li>
                 <li>Advanced reporting and analytics</li>
                 <li>Multi-user access with role-based permissions</li>
@@ -403,7 +403,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
               </ul>
             </div>
             
-            <p><strong>Important:</strong> After 30 days, your account will be suspended until payment is made.</p>
+            <p><strong>Important:</strong> After 15 days, your account will be suspended until payment is made.</p>
             
             <p>Best regards,<br>
             <strong>Hotel Management System Team</strong></p>
@@ -429,7 +429,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
     }
   }
 
-  // Send trial expiry reminder (29th day)
+  // Send trial expiry reminder (14th day)
   async sendTrialExpiryReminder(email, hotelName, adminName, expiryDate) {
     try {
       const htmlContent = `
@@ -444,7 +444,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
             <p>Dear <strong>${adminName}</strong>,</p>
             
-            <p>This is a friendly reminder that your <strong>30-day PRO plan trial</strong> for <strong>${hotelName}</strong> will expire tomorrow.</p>
+            <p>This is a friendly reminder that your <strong>15-day PRO plan trial</strong> for <strong>${hotelName}</strong> will expire tomorrow.</p>
             
             <div style="background: white; border: 2px solid #ff6b6b; border-radius: 8px; padding: 25px; margin: 25px 0; text-align: center;">
               <h3 style="color: #e53935; margin-top: 0;">🕒 Trial Expiry Date</h3>
@@ -519,7 +519,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
           <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
             <p>Dear <strong>${adminName}</strong>,</p>
             
-            <p>Your <strong>30-day PRO plan trial</strong> for <strong>${hotelName}</strong> has ended.</p>
+            <p>Your <strong>15-day PRO plan trial</strong> for <strong>${hotelName}</strong> has ended.</p>
             
             <div style="background: white; border: 2px solid #ff6b6b; border-radius: 8px; padding: 25px; margin: 25px 0; text-align: center;">
               <h3 style="color: #e53935; margin-top: 0;">🚫 Account Status: SUSPENDED</h3>
@@ -596,7 +596,7 @@ ${hotelDetails.name || 'Hotel Management'} Team`;
             
             ${plan === 'pro' ? `
             <div style="background: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <h3 style="color: #2e7d32; margin-top: 0;">✨ 30-Day PRO Plan Trial</h3>
+              <h3 style="color: #2e7d32; margin-top: 0;">✨ ${trialDays}-Day PRO Plan Trial</h3>
               <p><strong>Trial Period:</strong> ${trialDays} days</p>
               <p><strong>Trial Expiry:</strong> ${trialExpiryDate.toDateString()}</p>
               <p>Enjoy all PRO features during your trial period!</p>

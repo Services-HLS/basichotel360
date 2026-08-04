@@ -1725,7 +1725,7 @@ const PreviousBookingForm = ({
     customerPhone: '',
     customerEmail: '',
     idNumber: '',
-    idType: 'aadhaar' as 'pan' | 'aadhaar' | 'passport' | 'driving',
+    idType: 'aadhaar' as 'pan' | 'aadhaar' | 'passport' | 'driving' | 'voter',
 
     // Address Fields
     address: '',
@@ -1930,6 +1930,16 @@ const PreviousBookingForm = ({
           return {
             isValid: false,
             message: 'Driving license must be 8-16 alphanumeric characters'
+          };
+        }
+        break;
+
+      case 'voter':
+        const voterRegex = /^[A-Z]{3}[0-9]{7}$/;
+        if (!voterRegex.test(cleanId)) {
+          return {
+            isValid: false,
+            message: 'Voter ID must be 3 letters followed by 7 digits (e.g. ABC1234567)'
           };
         }
         break;
@@ -2529,6 +2539,7 @@ const PreviousBookingForm = ({
                   <option value="pan">PAN Card</option>
                   <option value="passport">Passport</option>
                   <option value="driving">Driving License</option>
+                  <option value="voter">Voter Card</option>
                 </select>
               </div>
 

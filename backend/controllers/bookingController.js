@@ -19,7 +19,7 @@ const SchedulerService = require('../services/schedulerService');
 const notificationEvents = require('../services/notificationEvents');
 const { isBasicHotelPlan } = require('../utils/planUtils');
 const { getPaymentBreakdown, parseCheckoutPaid } = require('../utils/paymentBreakdown');
-const { serializeGuestsForDb, formatGuestsForDisplay } = require('../utils/guestUtils');
+const { serializeGuestsForDb, formatGuestsForDisplay, formatGuestsDetailedForDisplay, getGuestNameGroups } = require('../utils/guestUtils');
 const { normalizeDateToYMD, isCheckoutOnOrAfterCheckin } = require('../utils/dateUtils');
 
 const fs = require('fs');
@@ -406,6 +406,9 @@ const bookingController = {
       // ===========================================
       // 4. CREATE BOOKING
       // ===========================================
+      const guestNamesPayload =
+        req.body.guest_names || req.body.guestNames || req.body.names || null;
+
       const bookingData = {
         hotel_id: hotelId,
         room_id,
@@ -423,7 +426,11 @@ const bookingController = {
         total: finalTotal,
         invoice_number: invoiceNumber,
         status: status || 'booked',
-        guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
+        // Keep raw adults/children/names — Booking.create serializes once
+        adults: req.body.adults,
+        children: req.body.children,
+        guests,
+        guest_names: guestNamesPayload,
         special_requests: special_requests || '',
         id_type: id_type || 'aadhaar',
         payment_method: payment_method || 'cash',
@@ -456,6 +463,23 @@ const bookingController = {
       }
 
       console.log('✅ Booking created successfully:', { bookingId });
+
+      const depositAmount = parseFloat(req.body.deposit_amount || 0) || 0;
+      if (depositAmount > 0) {
+        try {
+          await Booking.update(bookingId, hotelId, {
+            deposit_amount: depositAmount,
+            deposit_payment_method:
+              req.body.deposit_payment_method || req.body.payment_method || 'cash',
+            deposit_status: 'held',
+            deposit_returned: 0,
+            deposit_deducted: 0,
+            deposit_deduction_reason: null,
+          });
+        } catch (depErr) {
+          console.warn('⚠️ Failed to save deposit on booking:', depErr.message);
+        }
+      }
 
       if (req.body.online_payment_app) {
         try {
@@ -2920,7 +2944,7 @@ const bookingController = {
       <div class="cell-label">Stay Period</div>
       <div class="cell-value">
         <strong>${formatDateDisplay(booking.from_date)} — ${formatDateDisplay(booking.to_date)}</strong>
-        ${nights} Nights · ${formatGuestsForDisplay(booking.guests)}
+        ${nights} Nights · ${formatGuestsDetailedForDisplay(booking.guests)}
         <br>🏨 ${escapeHtml(roomDetails?.type || 'Standard')} Room
       </div>
     </div>
@@ -3592,7 +3616,10 @@ const bookingController = {
         total: finalTotal,
         invoice_number: finalInvoiceNumber,
         status: status,
-        guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
+        adults: req.body.adults,
+        children: req.body.children,
+        guests,
+        guest_names: req.body.guest_names || req.body.guestNames || req.body.names || null,
         special_requests: special_requests || '',
         id_type: id_type || 'aadhaar',
         payment_method: payment_method || 'cash',
@@ -4705,7 +4732,12 @@ const bookingController = {
   //           igst: parseFloat(igst || 0),
   //           total: parseFloat(total || amount || 0),
   //           status: 'booked',
-  //           guests: serializeGuestsForDb({ adults: req.body.adults, children: req.body.children, guests }),
+  //           guests: serializeGuestsForDb({
+  //             adults: req.body.adults,
+  //             children: req.body.children,
+  //             guests,
+  //             guest_names: req.body.guest_names || req.body.guestNames || req.body.names,
+  //           }),
   //           special_requests: special_requests || '',
   //           payment_method: payment_method || 'cash',
   //           payment_status: payment_status || 'pending',
@@ -5550,8 +5582,9 @@ const bookingController = {
       const invDate = formatDateDisplay(new Date().toISOString());
       const invFolio = `Room ${roomDetails?.room_number || ''}`;
 
-      // Guest details with address and GST
+      // Guest details with address and GST (names shown once in Guest Members section)
       const guestName = escapeHtml(customerDetails?.name || 'Walk-in Customer');
+      const guestNameGroups = getGuestNameGroups(booking.guests);
       let guestDetailsHtml = '';
       if (customerDetails?.email) {
         guestDetailsHtml += escapeHtml(customerDetails.email) + '<br>';
@@ -5566,7 +5599,24 @@ const bookingController = {
       const guestDetails = guestDetailsHtml;
 
       const stayDates = `${formatDateDisplay(booking.from_date)} — ${formatDateDisplay(booking.to_date)}`;
-      const stayDetails = `${nights} Nights · ${formatGuestsForDisplay(booking.guests)}<br>${roomDetails?.type || 'Standard'} Room`;
+      const stayDetails = `${nights} Nights · ${formatGuestsForDisplay(booking.guests)}<br>${escapeHtml(roomDetails?.type || 'Standard')} Room`;
+
+      let guestMembersHtml = '';
+      if (guestNameGroups.allNames.length > 0) {
+        const lines = [];
+        lines.push(`<div><strong>Total:</strong> ${formatGuestsForDisplay(booking.guests)}</div>`);
+        if (guestNameGroups.adultNames.length > 0) {
+          lines.push(`<div><strong>Adults (${guestNameGroups.adultNames.length}):</strong> ${guestNameGroups.adultNames.map((n) => escapeHtml(n)).join(', ')}</div>`);
+        }
+        if (guestNameGroups.childNames.length > 0) {
+          lines.push(`<div><strong>Children (${guestNameGroups.childNames.length}):</strong> ${guestNameGroups.childNames.map((n) => escapeHtml(n)).join(', ')}</div>`);
+        }
+        guestMembersHtml = lines.join('');
+      } else {
+        guestMembersHtml = `<div>${formatGuestsForDisplay(booking.guests)}</div>`;
+      }
+      const showGuestMembers = guestNameGroups.allNames.length > 0 ? 'block' : 'none';
+
       const resId = `RES-${booking.id}`;
       const resDetails = escapeHtml(booking.special_requests ? 'Special Request: ' + booking.special_requests.substring(0, 50) : 'Direct Booking');
       const roomType = escapeHtml(roomDetails?.type || 'Deluxe King Room');
@@ -5715,6 +5765,8 @@ const bookingController = {
       html = html.split('GUEST_DETAILS_PLACEHOLDER').join(guestDetails);
       html = html.split('STAY_DATES_PLACEHOLDER').join(stayDates);
       html = html.split('STAY_DETAILS_PLACEHOLDER').join(stayDetails);
+      html = html.split('__SHOW_GUEST_MEMBERS__').join(showGuestMembers);
+      html = html.split('__GUEST_MEMBERS_HTML__').join(guestMembersHtml);
       html = html.split('RES_ID_PLACEHOLDER').join(resId);
       html = html.split('RES_DETAILS_PLACEHOLDER').join(resDetails);
       html = html.split('ROOM_ROWS_PLACEHOLDER').join(roomRows);
@@ -6186,7 +6238,8 @@ const bookingController = {
       calcRows += '<button class="remove-btn" style="right:-20px;" onclick="this.parentElement.remove()">×</button>';
       calcRows += '</div>';
 
-      // Prepare guest details with address and GST
+      // Prepare guest details with address and GST (names once in Guest Members only)
+      const groupGuestNames = getGuestNameGroups(firstBooking.guests);
       let guestDetailsHtml = '';
       if (customerDetails?.email) {
         guestDetailsHtml += escapeHtml(customerDetails.email) + '<br>';
@@ -6214,9 +6267,25 @@ const bookingController = {
       const invFolio = `${groupBookings.length} Rooms`;
       const guestName = escapeHtml(customerDetails?.name || 'Group Booking');
       const stayDates = `${formatDateDisplay(firstBooking.from_date)} — ${formatDateDisplay(firstBooking.to_date)}`;
-      const stayDetails = `${nights} Nights · ${groupBookings.length} Rooms<br>Group booking with ${groupBookings.length} rooms`;
+      const stayDetails = `${nights} Nights · ${groupBookings.length} Rooms · ${formatGuestsForDisplay(firstBooking.guests)}<br>Group booking with ${groupBookings.length} rooms`;
       const resId = `GRP-${groupId.slice(-6)}`;
       const resDetails = `Group booking with ${groupBookings.length} rooms`;
+
+      let guestMembersHtml = '';
+      if (groupGuestNames.allNames.length > 0) {
+        guestMembersHtml = [
+          `<div><strong>Total:</strong> ${formatGuestsForDisplay(firstBooking.guests)}</div>`,
+          groupGuestNames.adultNames.length
+            ? `<div><strong>Adults (${groupGuestNames.adultNames.length}):</strong> ${groupGuestNames.adultNames.map((n) => escapeHtml(n)).join(', ')}</div>`
+            : '',
+          groupGuestNames.childNames.length
+            ? `<div><strong>Children (${groupGuestNames.childNames.length}):</strong> ${groupGuestNames.childNames.map((n) => escapeHtml(n)).join(', ')}</div>`
+            : '',
+        ].filter(Boolean).join('');
+      } else {
+        guestMembersHtml = `<div>${formatGuestsForDisplay(firstBooking.guests)}</div>`;
+      }
+      const showGuestMembers = groupGuestNames.allNames.length > 0 ? 'block' : 'none';
 
       // Simplified payment status - just show the amount (includes taxes)
       const totalDue = totalRemaining > 0 ? totalRemaining : totalWithTax;
@@ -6270,6 +6339,8 @@ const bookingController = {
       html = html.split('GUEST_DETAILS_PLACEHOLDER').join(guestDetailsHtml);
       html = html.split('STAY_DATES_PLACEHOLDER').join(stayDates);
       html = html.split('STAY_DETAILS_PLACEHOLDER').join(stayDetails);
+      html = html.split('__SHOW_GUEST_MEMBERS__').join(showGuestMembers);
+      html = html.split('__GUEST_MEMBERS_HTML__').join(guestMembersHtml);
       html = html.split('RES_ID_PLACEHOLDER').join(resId);
       html = html.split('RES_DETAILS_PLACEHOLDER').join(resDetails);
       html = html.split('ROOM_ROWS_PLACEHOLDER').join(roomRows);
