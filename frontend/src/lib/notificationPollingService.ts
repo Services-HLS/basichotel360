@@ -33,8 +33,8 @@ import {
 import { scheduleBookingReminders, scheduleTrialReminders } from '@/lib/localNotificationService';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
-/** Match senior dev poll cadence for checkout reminders */
-export const NOTIFICATION_POLL_INTERVAL_MS = 30_000;
+/** Shared poll cadence — keep moderate to avoid EB/nginx pressure from large payloads */
+export const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
 
 export type NotificationPollCounts = {
   pendingCheckout: number;
@@ -215,7 +215,7 @@ export async function pollNotificationData(options?: {
       fetchJson<{ success?: boolean; data?: { records?: HousekeepingRow[] } }>(
         `/housekeeping?date=${today}`
       ),
-      fetchJson<{ data?: AdvanceRow[] }>(`/advance-bookings?t=${Date.now()}`),
+      fetchJson<{ data?: AdvanceRow[] }>(`/advance-bookings?active_only=1`),
       fetchJson<{ data?: FunctionRow[] }>('/function-rooms/bookings/with-rooms'),
       fetchJson<{ data?: RefundApiData | RefundRow[] }>('/refunds/cancellable-bookings'),
       fetchJson<{
@@ -657,4 +657,79 @@ export async function pollNotificationData(options?: {
     console.warn('Notification poll failed:', error);
     return EMPTY_RESULT;
   }
+}
+
+type NotificationPollListener = (result: NotificationPollResult) => void;
+
+const pollListeners = new Set<NotificationPollListener>();
+let sharedPollIntervalId: ReturnType<typeof setInterval> | null = null;
+let sharedPollInFlight: Promise<NotificationPollResult> | null = null;
+let lastSharedPollResult: NotificationPollResult | null = null;
+let sharedShowBookingNotifications = true;
+
+async function runSharedNotificationPoll(): Promise<NotificationPollResult> {
+  if (sharedPollInFlight) return sharedPollInFlight;
+
+  sharedPollInFlight = pollNotificationData({
+    showBookingNotifications: sharedShowBookingNotifications,
+  })
+    .then((result) => {
+      lastSharedPollResult = result;
+      pollListeners.forEach((listener) => {
+        try {
+          listener(result);
+        } catch {
+          // ignore subscriber errors
+        }
+      });
+      return result;
+    })
+    .finally(() => {
+      sharedPollInFlight = null;
+    });
+
+  return sharedPollInFlight;
+}
+
+/**
+ * Single shared poller for Layout badges + bell UI.
+ * Multiple subscribers share one network cycle (avoids 2–3× parallel heavy fetches).
+ */
+export function subscribeNotificationPoll(
+  listener: NotificationPollListener,
+  options?: { showBookingNotifications?: boolean }
+): () => void {
+  if (options?.showBookingNotifications !== undefined) {
+    sharedShowBookingNotifications = options.showBookingNotifications;
+  }
+
+  pollListeners.add(listener);
+
+  if (lastSharedPollResult) {
+    try {
+      listener(lastSharedPollResult);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (pollListeners.size === 1) {
+    void runSharedNotificationPoll();
+    sharedPollIntervalId = setInterval(() => {
+      void runSharedNotificationPoll();
+    }, NOTIFICATION_POLL_INTERVAL_MS);
+  }
+
+  return () => {
+    pollListeners.delete(listener);
+    if (pollListeners.size === 0 && sharedPollIntervalId) {
+      clearInterval(sharedPollIntervalId);
+      sharedPollIntervalId = null;
+    }
+  };
+}
+
+/** Trigger an immediate shared refresh (e.g. after booking create/checkout). */
+export function refreshSharedNotificationPoll(): Promise<NotificationPollResult> {
+  return runSharedNotificationPoll();
 }

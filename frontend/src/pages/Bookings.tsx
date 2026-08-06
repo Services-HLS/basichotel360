@@ -2378,8 +2378,8 @@ const Bookings = () => {
         setCheckoutBooking(null);
         if (checkoutBooking) {
           notifyRoomNeedsCleaning({
-            bookingId: checkoutBooking.bookingId,
-            roomNumber: checkoutBooking.roomNumber || '—',
+            bookingId: String(checkoutBooking.bookingId),
+            roomNumber: String(checkoutBooking.roomNumber || '—'),
             customerName: checkoutBooking.customerName || 'Guest',
           });
           removeNotification(`checkout-${checkoutBooking.bookingId}`);
@@ -2883,7 +2883,7 @@ const Bookings = () => {
           if (updates.status === 'completed' && currentBooking) {
             notifyRoomNeedsCleaning({
               bookingId: String(currentBooking.bookingId ?? bookingId),
-              roomNumber: currentBooking.roomNumber || '—',
+              roomNumber: String(currentBooking.roomNumber || '—'),
               customerName: currentBooking.customerName || 'Guest',
             });
             removeNotification(`checkout-${bookingId}`);
@@ -7319,7 +7319,7 @@ const Bookings = () => {
 
                 {checkoutActiveTab === 'payment' && checkoutTotals && (
                   <div className="space-y-4">
-                    {checkoutBooking.status === 'completed' && (
+                    {checkoutBooking.payment_status === 'completed' && (
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
                         <p className="font-medium">Payment recorded</p>
                         <p className="text-xs mt-1">

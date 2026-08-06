@@ -33,8 +33,8 @@ import {
   type NotificationModule,
 } from '@/lib/notificationStore';
 import {
-  pollNotificationData,
-  NOTIFICATION_POLL_INTERVAL_MS,
+  refreshSharedNotificationPoll,
+  subscribeNotificationPoll,
 } from '@/lib/notificationPollingService';
 import { getCurrentUser } from '@/lib/storage';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -297,33 +297,42 @@ export default function CheckoutNotifications() {
     if (!canFetch) return;
     setLoading(true);
     try {
-      const result = await pollNotificationData({ showBookingNotifications });
+      const result = await refreshSharedNotificationPoll();
       setLiveNotifications(result.liveNotifications);
     } finally {
       setLoading(false);
       setStoreVersion((v) => v + 1);
     }
-  }, [canFetch, showBookingNotifications]);
+  }, [canFetch]);
 
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, NOTIFICATION_POLL_INTERVAL_MS);
+    if (!canFetch) return;
+
+    const unsubscribe = subscribeNotificationPoll(
+      (result) => {
+        setLiveNotifications(result.liveNotifications);
+        setLoading(false);
+        setStoreVersion((v) => v + 1);
+      },
+      { showBookingNotifications }
+    );
+
     const onUpdate = () => {
       setStoreVersion((v) => v + 1);
-      void loadNotifications();
+      void refreshSharedNotificationPoll();
     };
     window.addEventListener(BOOKINGS_UPDATED_EVENT, onUpdate);
     window.addEventListener(BOOKING_CREATED_EVENT, onUpdate);
     window.addEventListener(CHECKOUT_REMINDER_EVENT, onUpdate);
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdate);
     return () => {
-      clearInterval(interval);
+      unsubscribe();
       window.removeEventListener(BOOKINGS_UPDATED_EVENT, onUpdate);
       window.removeEventListener(BOOKING_CREATED_EVENT, onUpdate);
       window.removeEventListener(CHECKOUT_REMINDER_EVENT, onUpdate);
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdate);
     };
-  }, [loadNotifications]);
+  }, [canFetch, showBookingNotifications]);
 
   const grouped = useMemo(() => {
     void storeVersion;

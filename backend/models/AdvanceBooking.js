@@ -293,9 +293,62 @@ class AdvanceBooking {
     // }
 
     // Get all advance bookings for hotel
+    // Omit id_image / id_image2 from list queries — base64 blobs make payloads ~1MB+
+    // and trip EB/nginx buffering. Use findById when images are needed.
     static async findByHotel(hotelId, filters = {}) {
+        const applyFilters = (query, params) => {
+            if (filters.status) {
+                query += ` AND ab.status = ?`;
+                params.push(filters.status);
+            }
+
+            if (filters.active_only) {
+                query += ` AND ab.status NOT IN ('cancelled', 'converted', 'completed')`;
+            }
+
+            if (filters.payment_status) {
+                query += ` AND ab.payment_status = ?`;
+                params.push(filters.payment_status);
+            }
+
+            if (filters.from_date && filters.to_date) {
+                query += ` AND DATE(ab.from_date) >= ? AND DATE(ab.to_date) <= ?`;
+                params.push(filters.from_date, filters.to_date);
+            }
+
+            query += ` ORDER BY ab.created_at DESC`;
+            return query;
+        };
+
+        const mapRow = (booking) => {
+            const { id_image, id_image2, ...rest } = booking;
+            return {
+                ...rest,
+                has_id_image: Boolean(
+                    booking.has_id_image ?? (id_image && String(id_image).length > 0)
+                ),
+                has_id_image2: Boolean(
+                    booking.has_id_image2 ?? (id_image2 && String(id_image2).length > 0)
+                ),
+                is_checkout_auto_generated: booking.notes
+                    ? booking.notes.includes('[System] Checkout date was auto-generated')
+                    : false
+            };
+        };
+
+        const params = [hotelId];
         let query = `
-    SELECT ab.*, 
+    SELECT ab.id, ab.hotel_id, ab.customer_id, ab.room_id, ab.group_booking_id,
+           ab.from_date, ab.to_date, ab.from_time, ab.to_time, ab.guests,
+           ab.amount, ab.advance_amount, ab.remaining_amount, ab.service,
+           ab.cgst, ab.sgst, ab.igst, ab.total, ab.payment_method, ab.payment_status,
+           ab.transaction_id, ab.invoice_number, ab.status, ab.advance_expiry_date,
+           ab.expiry_days, ab.special_requests, ab.id_type, ab.id_number,
+           ab.referral_by, ab.referral_amount, ab.address, ab.city, ab.state,
+           ab.pincode, ab.customer_gst_no, ab.purpose_of_visit, ab.other_expenses,
+           ab.expense_description, ab.created_by, ab.notes, ab.created_at, ab.updated_at,
+           (ab.id_image IS NOT NULL AND ab.id_image != '') AS has_id_image,
+           (ab.id_image2 IS NOT NULL AND ab.id_image2 != '') AS has_id_image2,
            r.room_number, r.type as room_type,
            c.name as customer_name, c.phone as customer_phone
     FROM advance_bookings ab
@@ -303,34 +356,28 @@ class AdvanceBooking {
     LEFT JOIN customers c ON ab.customer_id = c.id
     WHERE ab.hotel_id = ?
     `;
-        const params = [hotelId];
+        query = applyFilters(query, params);
 
-        if (filters.status) {
-            query += ` AND ab.status = ?`;
-            params.push(filters.status);
+        try {
+            const [rows] = await pool.execute(query, params);
+            return rows.map(mapRow);
+        } catch (err) {
+            // Schema drift fallback: fetch all columns then strip images before return
+            console.warn('⚠️ Slim advance-bookings query failed, falling back:', err.message);
+            const fallbackParams = [hotelId];
+            let fallbackQuery = `
+    SELECT ab.*,
+           r.room_number, r.type as room_type,
+           c.name as customer_name, c.phone as customer_phone
+    FROM advance_bookings ab
+    LEFT JOIN rooms r ON ab.room_id = r.id
+    LEFT JOIN customers c ON ab.customer_id = c.id
+    WHERE ab.hotel_id = ?
+    `;
+            fallbackQuery = applyFilters(fallbackQuery, fallbackParams);
+            const [rows] = await pool.execute(fallbackQuery, fallbackParams);
+            return rows.map(mapRow);
         }
-
-        if (filters.payment_status) {
-            query += ` AND ab.payment_status = ?`;
-            params.push(filters.payment_status);
-        }
-
-        if (filters.from_date && filters.to_date) {
-            query += ` AND DATE(ab.from_date) >= ? AND DATE(ab.to_date) <= ?`;
-            params.push(filters.from_date, filters.to_date);
-        }
-
-        query += ` ORDER BY ab.created_at DESC`;
-
-        const [rows] = await pool.execute(query, params);
-
-        // Add a flag to indicate if checkout was auto-generated
-        // This checks if notes contain the auto-generation message
-        return rows.map(booking => ({
-            ...booking,
-            is_checkout_auto_generated: booking.notes ?
-                booking.notes.includes('[System] Checkout date was auto-generated') : false
-        }));
     }
 
     // Update advance booking

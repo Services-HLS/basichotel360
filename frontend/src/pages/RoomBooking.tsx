@@ -111,6 +111,7 @@ interface Booking {
   advanceAmountPaid?: number;
   paymentStatus: string;
   idImage?: string;
+  hasIdImage?: boolean;
   fromDate?: string;
   toDate?: string;
   isAdvanceBooking?: boolean;
@@ -1343,6 +1344,7 @@ const RoomBooking = () => {
               totalAmount: Number(ab.total) || 0,
               paymentStatus: ab.payment_status || ab.paymentStatus || 'pending',
               idImage: ab.id_image || ab.idImage || null,
+              hasIdImage: Boolean(ab.has_id_image || ab.id_image || ab.idImage),
               isAdvanceBooking: true,
               bookingType: 'advance',
               advanceAmount: Number(ab.advance_amount) || 0,
@@ -1742,8 +1744,38 @@ const RoomBooking = () => {
     }
   };
 
-  const handleViewBooking = (booking: Booking) => {
+  const handleViewBooking = async (booking: Booking) => {
     setSelectedBooking(booking);
+
+    // List API omits base64 ID images — load on demand for advance bookings
+    if (
+      booking.isAdvanceBooking &&
+      booking.hasIdImage &&
+      !booking.idImage &&
+      userSource === 'database'
+    ) {
+      try {
+        const rawId = String(booking.id).replace(/^adv-/, '');
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${NODE_BACKEND_URL}/advance-bookings/${rawId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        const detail = result?.data;
+        const image = detail?.id_image || detail?.idImage || null;
+        if (image) {
+          setSelectedBooking((prev) =>
+            prev && prev.id === booking.id ? { ...prev, idImage: image } : prev
+          );
+        }
+      } catch (error) {
+        console.warn('Failed to load advance booking ID image:', error);
+      }
+    }
   };
 
   const handleViewID = (imageData: string) => {

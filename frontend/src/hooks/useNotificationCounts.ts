@@ -5,8 +5,8 @@ import {
   type NotificationModule,
 } from '@/lib/notificationStore';
 import {
-  NOTIFICATION_POLL_INTERVAL_MS,
-  pollNotificationData,
+  refreshSharedNotificationPoll,
+  subscribeNotificationPoll,
   type NotificationPollCounts,
 } from '@/lib/notificationPollingService';
 import { getCurrentUser } from '@/lib/storage';
@@ -58,27 +58,39 @@ export function useNotificationCounts(): {
     }
 
     try {
-      const result = await pollNotificationData({ showBookingNotifications });
+      const result = await refreshSharedNotificationPoll();
       setCounts(result.counts);
       setModuleCounts(getUnreadCountByModule());
     } catch {
       setModuleCounts(getUnreadCountByModule());
     }
-  }, [canFetch, showBookingNotifications]);
+  }, [canFetch]);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, NOTIFICATION_POLL_INTERVAL_MS);
+    if (!canFetch) {
+      setCounts(EMPTY_COUNTS);
+      setModuleCounts(getUnreadCountByModule());
+      return;
+    }
+
+    const unsubscribe = subscribeNotificationPoll(
+      (result) => {
+        setCounts(result.counts);
+        setModuleCounts(getUnreadCountByModule());
+      },
+      { showBookingNotifications }
+    );
+
     const onUpdate = () => {
       setModuleCounts(getUnreadCountByModule());
-      void refresh();
+      void refreshSharedNotificationPoll();
     };
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdate);
     return () => {
-      clearInterval(interval);
+      unsubscribe();
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdate);
     };
-  }, [refresh]);
+  }, [canFetch, showBookingNotifications]);
 
   const badges: SidebarNotificationBadges = {
     '/bookings':
@@ -96,4 +108,3 @@ export function useNotificationCounts(): {
 
   return { counts, badges, moduleCounts, refresh };
 }
-

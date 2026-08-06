@@ -618,7 +618,7 @@ const advanceBookingController = {
     getAdvanceBookings: async (req, res) => {
         try {
             const hotelId = req.user.hotel_id;
-            const { status, payment_status, from_date, to_date } = req.query;
+            const { status, payment_status, from_date, to_date, active_only } = req.query;
 
             // Check for expired bookings first
             await AdvanceBooking.checkExpired(hotelId);
@@ -627,7 +627,8 @@ const advanceBookingController = {
                 status,
                 payment_status,
                 from_date,
-                to_date
+                to_date,
+                active_only: active_only === '1' || active_only === 'true'
             });
 
             // Format dates properly for frontend

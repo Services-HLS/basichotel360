@@ -393,7 +393,7 @@ export function notifyHousekeepingTask(item: {
 
 export function notifyRoomNeedsCleaning(item: {
   bookingId: string;
-  roomNumber: string;
+  roomNumber: string | number;
   customerName: string;
 }) {
   addNotification({
