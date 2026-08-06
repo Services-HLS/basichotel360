@@ -61,11 +61,12 @@ export type BookingNotification = {
   createdAt: string;
 };
 
-const STORAGE_KEY = 'hms-app-notifications';
-const READ_KEY = 'hms-app-notifications-read';
-const LEGACY_BOOKING_STORAGE_KEY = 'hms-booking-notifications';
-const LEGACY_BOOKING_READ_KEY = 'hms-booking-notifications-read';
-const LEGACY_CHECKOUT_REMINDER_READ_KEY = 'hms-checkout-reminder-read';
+const STORAGE_KEY_BASE = 'hms-app-notifications';
+const READ_KEY_BASE = 'hms-app-notifications-read';
+const LEGACY_BOOKING_STORAGE_KEY_BASE = 'hms-booking-notifications';
+const LEGACY_BOOKING_READ_KEY_BASE = 'hms-booking-notifications-read';
+const LEGACY_CHECKOUT_REMINDER_READ_KEY_BASE = 'hms-checkout-reminder-read';
+const ACTIVE_USER_KEY = 'hms-notifications-active-user';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'hms-notifications-updated';
 export const BOOKING_CREATED_EVENT = 'hms-booking-created';
@@ -85,9 +86,96 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
+/** Resolve logged-in user id for notification isolation */
+export function getNotificationUserId(): string {
+  try {
+    const u = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    return String(u.id ?? u.userId ?? u.user_id ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function scopedKey(base: string): string {
+  const uid = getNotificationUserId();
+  // Never write to unscoped keys — prevents cross-user leaks on shared devices
+  return `${base}:${uid || '__none__'}`;
+}
+
+function storageKey() {
+  return scopedKey(STORAGE_KEY_BASE);
+}
+
+function readKey() {
+  return scopedKey(READ_KEY_BASE);
+}
+
+function legacyBookingStorageKey() {
+  return scopedKey(LEGACY_BOOKING_STORAGE_KEY_BASE);
+}
+
+function legacyBookingReadKey() {
+  return scopedKey(LEGACY_BOOKING_READ_KEY_BASE);
+}
+
+function legacyCheckoutReminderReadKey() {
+  return scopedKey(LEGACY_CHECKOUT_REMINDER_READ_KEY_BASE);
+}
+
+/** Remove old global (unscoped) keys that mixed users on one device */
+function purgeLegacyGlobalNotificationKeys() {
+  const globalBases = [
+    STORAGE_KEY_BASE,
+    READ_KEY_BASE,
+    LEGACY_BOOKING_STORAGE_KEY_BASE,
+    LEGACY_BOOKING_READ_KEY_BASE,
+    LEGACY_CHECKOUT_REMINDER_READ_KEY_BASE,
+  ];
+  for (const base of globalBases) {
+    localStorage.removeItem(base);
+  }
+}
+
+/**
+ * Call right after login once `currentUser` is set.
+ * Switches storage to this user and drops leaked global cache.
+ */
+export function bindNotificationsToLoggedInUser() {
+  purgeLegacyGlobalNotificationKeys();
+  const uid = getNotificationUserId();
+  if (uid) {
+    localStorage.setItem(ACTIVE_USER_KEY, uid);
+  }
+  dispatchNotificationsUpdated();
+}
+
+/**
+ * Call on logout (before or after clearing `currentUser`).
+ * Does not delete other users' scoped history; clears session + legacy globals.
+ */
+export function clearNotificationsOnLogout() {
+  purgeLegacyGlobalNotificationKeys();
+  localStorage.removeItem(ACTIVE_USER_KEY);
+  // Drop ephemeral "__none__" bucket if anything wrote while logged out
+  localStorage.removeItem(`${STORAGE_KEY_BASE}:__none__`);
+  localStorage.removeItem(`${READ_KEY_BASE}:__none__`);
+  localStorage.removeItem(`${LEGACY_BOOKING_STORAGE_KEY_BASE}:__none__`);
+  localStorage.removeItem(`${LEGACY_BOOKING_READ_KEY_BASE}:__none__`);
+  localStorage.removeItem(`${LEGACY_CHECKOUT_REMINDER_READ_KEY_BASE}:__none__`);
+  dispatchNotificationsUpdated();
+}
+
+/** Clear read/dismissed state for the active user only */
+export function clearNotificationReadState() {
+  localStorage.removeItem(readKey());
+  localStorage.removeItem(legacyBookingReadKey());
+  localStorage.removeItem(legacyCheckoutReminderReadKey());
+  dispatchNotificationsUpdated();
+}
+
 function migrateLegacyBookingNotifications() {
   const legacy = safeParse<BookingNotification[]>(
-    localStorage.getItem(LEGACY_BOOKING_STORAGE_KEY),
+    localStorage.getItem(legacyBookingStorageKey()),
     []
   );
   if (legacy.length === 0) return;
@@ -102,16 +190,20 @@ function migrateLegacyBookingNotifications() {
     persistNotifications([...migrated, ...existing].slice(0, MAX_STORED));
   }
 
-  const legacyRead = safeParse<string[]>(localStorage.getItem(LEGACY_BOOKING_READ_KEY), []);
+  const legacyRead = safeParse<string[]>(
+    localStorage.getItem(legacyBookingReadKey()),
+    []
+  );
   if (legacyRead.length > 0) {
     const read = getReadNotificationIds();
     legacyRead.forEach((id) => read.add(`booking-${id}`));
-    localStorage.setItem(READ_KEY, JSON.stringify([...read].slice(-MAX_READ_IDS)));
+    localStorage.setItem(readKey(), JSON.stringify([...read].slice(-MAX_READ_IDS)));
   }
 }
 
 function persistNotifications(items: AppNotification[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_STORED)));
+  if (!getNotificationUserId()) return; // never persist while logged out
+  localStorage.setItem(storageKey(), JSON.stringify(items.slice(0, MAX_STORED)));
 }
 
 function dispatchNotificationsUpdated() {
@@ -120,13 +212,14 @@ function dispatchNotificationsUpdated() {
 }
 
 export function getStoredNotifications(): AppNotification[] {
+  if (!getNotificationUserId()) return [];
   migrateLegacyBookingNotifications();
-  return safeParse<AppNotification[]>(localStorage.getItem(STORAGE_KEY), []);
+  return safeParse<AppNotification[]>(localStorage.getItem(storageKey()), []);
 }
 
 function migrateLegacyCheckoutReminderReads() {
   const legacy = safeParse<string[]>(
-    localStorage.getItem(LEGACY_CHECKOUT_REMINDER_READ_KEY),
+    localStorage.getItem(legacyCheckoutReminderReadKey()),
     []
   );
   if (legacy.length === 0) return;
@@ -135,13 +228,14 @@ function migrateLegacyCheckoutReminderReads() {
   for (const bookingId of legacy) {
     read.add(`checkout-soon-${bookingId}`);
   }
-  localStorage.setItem(READ_KEY, JSON.stringify([...read].slice(-MAX_READ_IDS)));
-  localStorage.removeItem(LEGACY_CHECKOUT_REMINDER_READ_KEY);
+  localStorage.setItem(readKey(), JSON.stringify([...read].slice(-MAX_READ_IDS)));
+  localStorage.removeItem(legacyCheckoutReminderReadKey());
 }
 
 export function getReadNotificationIds(): Set<string> {
+  if (!getNotificationUserId()) return new Set();
   migrateLegacyCheckoutReminderReads();
-  return new Set(safeParse<string[]>(localStorage.getItem(READ_KEY), []));
+  return new Set(safeParse<string[]>(localStorage.getItem(readKey()), []));
 }
 
 export function getUnreadNotifications(): AppNotification[] {
@@ -180,18 +274,20 @@ export function getTotalUnreadCount(): number {
 }
 
 export function markNotificationRead(id: string) {
+  if (!getNotificationUserId()) return;
   const read = getReadNotificationIds();
   read.add(id);
-  localStorage.setItem(READ_KEY, JSON.stringify([...read].slice(-MAX_READ_IDS)));
+  localStorage.setItem(readKey(), JSON.stringify([...read].slice(-MAX_READ_IDS)));
   dispatchNotificationsUpdated();
 }
 
 export function markModuleNotificationsRead(module: NotificationModule) {
+  if (!getNotificationUserId()) return;
   const read = getReadNotificationIds();
   for (const n of getStoredNotifications()) {
     if (n.module === module) read.add(n.id);
   }
-  localStorage.setItem(READ_KEY, JSON.stringify([...read].slice(-MAX_READ_IDS)));
+  localStorage.setItem(readKey(), JSON.stringify([...read].slice(-MAX_READ_IDS)));
   dispatchNotificationsUpdated();
 }
 
@@ -226,14 +322,16 @@ export async function clearAllNotificationBadges(): Promise<void> {
     // still persist stored notification dismissals
   }
 
+  if (!getNotificationUserId()) return;
+
   const readList = [...read].slice(-MAX_READ_IDS);
-  localStorage.setItem(READ_KEY, JSON.stringify(readList));
+  localStorage.setItem(readKey(), JSON.stringify(readList));
 
   const legacyBookingIds = readList
     .filter((id) => id.startsWith('booking-'))
     .map((id) => id.replace('booking-', ''));
   localStorage.setItem(
-    LEGACY_BOOKING_READ_KEY,
+    legacyBookingReadKey(),
     JSON.stringify(legacyBookingIds.slice(-200))
   );
 
@@ -241,7 +339,7 @@ export async function clearAllNotificationBadges(): Promise<void> {
     .filter((id) => id.startsWith('checkout-soon-'))
     .map((id) => id.replace('checkout-soon-', ''));
   localStorage.setItem(
-    LEGACY_CHECKOUT_REMINDER_READ_KEY,
+    legacyCheckoutReminderReadKey(),
     JSON.stringify(legacyCheckoutIds.slice(-200))
   );
 
@@ -251,6 +349,8 @@ export async function clearAllNotificationBadges(): Promise<void> {
 export function addNotification(
   item: Omit<AppNotification, 'createdAt'> & { createdAt?: string }
 ) {
+  if (!getNotificationUserId()) return;
+
   const notification: AppNotification = {
     ...item,
     createdAt: item.createdAt ?? new Date().toISOString(),
@@ -273,7 +373,10 @@ export function addNotification(
 }
 
 export function upsertNotifications(items: AppNotification[]) {
+  if (!getNotificationUserId()) return;
+
   const byId = new Map<string, AppNotification>();
+  // Merge only within this user's scoped store (never global/other-user cache)
   for (const item of [...items, ...getStoredNotifications()]) {
     byId.set(item.id, item);
   }

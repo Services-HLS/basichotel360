@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import {
   MODULE_LABELS,
   MODULE_ORDER,
-  NOTIFICATIONS_UPDATED_EVENT,
   clearAllNotificationBadges,
+  clearNotificationReadState,
   getReadNotificationIds,
   getStoredNotifications,
   getUnreadNotifications,
@@ -103,10 +103,7 @@ export default function NotificationDiagnostics() {
   }, []);
 
   const clearDismissed = () => {
-    localStorage.removeItem('hms-app-notifications-read');
-    localStorage.removeItem('hms-booking-notifications-read');
-    localStorage.removeItem('hms-checkout-reminder-read');
-    window.dispatchEvent(new CustomEvent(NOTIFICATIONS_UPDATED_EVENT));
+    clearNotificationReadState();
   };
 
   const clearBadges = async () => {

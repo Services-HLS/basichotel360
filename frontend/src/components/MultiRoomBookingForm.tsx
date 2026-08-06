@@ -1351,11 +1351,11 @@ export default function MultiRoomBookingForm({
                 <h4 className="font-semibold text-green-800">Apply Discount to All Rooms</h4>
               </div>
 
-              <div className="flex gap-2 mb-4 bg-white rounded-lg p-1 w-fit">
+              <div className="flex gap-2 mb-4 bg-white rounded-lg p-1 w-full sm:w-fit">
                 <button
                   type="button"
                   onClick={() => setDiscountType('percentage')}
-                  className={`px-4 py-2 text-sm rounded-md transition-all ${discountType === 'percentage'
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-md transition-all whitespace-nowrap ${discountType === 'percentage'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -1365,7 +1365,7 @@ export default function MultiRoomBookingForm({
                 <button
                   type="button"
                   onClick={() => setDiscountType('amount')}
-                  className={`px-4 py-2 text-sm rounded-md transition-all ${discountType === 'amount'
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-md transition-all whitespace-nowrap ${discountType === 'amount'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -1377,7 +1377,7 @@ export default function MultiRoomBookingForm({
               <div className="space-y-3">
                 {discountType === 'percentage' && (
                   <>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       <Button
                         type="button"
                         variant={!useCustomDiscount && discountPercentage === 10 ? "default" : "outline"}
@@ -1386,7 +1386,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(10);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         10% OFF
                       </Button>
@@ -1398,7 +1398,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(15);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         15% OFF
                       </Button>
@@ -1410,7 +1410,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(20);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         20% OFF
                       </Button>
@@ -1422,18 +1422,18 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(true);
                           setCustomDiscountPercentage(25);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         Custom
                       </Button>
                     </div>
 
                     {useCustomDiscount && (
-                      <div className="flex items-center gap-3">
-                        <Label htmlFor="customDiscountMulti" className="whitespace-nowrap">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <Label htmlFor="customDiscountMulti" className="whitespace-nowrap shrink-0">
                           Discount Percentage:
                         </Label>
-                        <div className="relative flex-1">
+                        <div className="relative w-full sm:flex-1">
                           <Input
                             id="customDiscountMulti"
                             type="number"
@@ -1455,7 +1455,7 @@ export default function MultiRoomBookingForm({
 
                 {discountType === 'amount' && (
                   <>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       <Button
                         type="button"
                         variant={!useCustomDiscount && discountAmount === 500 ? "default" : "outline"}
@@ -1464,7 +1464,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(500);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         ₹500 OFF
                       </Button>
@@ -1476,7 +1476,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(1000);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         ₹1000 OFF
                       </Button>
@@ -1488,7 +1488,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(1500);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         ₹1500 OFF
                       </Button>
@@ -1500,7 +1500,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(2000);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
                       >
                         ₹2000 OFF
                       </Button>
@@ -1512,18 +1512,18 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(true);
                           setCustomDiscountAmount(100);
                         }}
-                        className="flex-1"
+                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap col-span-2 sm:col-span-1"
                       >
                         Custom
                       </Button>
                     </div>
 
                     {useCustomDiscount && (
-                      <div className="flex items-center gap-3">
-                        <Label htmlFor="customDiscountAmount" className="whitespace-nowrap">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <Label htmlFor="customDiscountAmount" className="whitespace-nowrap shrink-0">
                           Discount Amount (₹):
                         </Label>
-                        <div className="relative flex-1">
+                        <div className="relative w-full sm:flex-1">
                           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                           <Input
                             id="customDiscountAmount"

@@ -45,7 +45,15 @@ export const USER_DATA_KEYS = [
   
   // Form drafts
   'bookingFormDraft',
-  'customerFormDraft'
+  'customerFormDraft',
+
+  // In-app notifications (legacy unscoped keys)
+  'hms-app-notifications',
+  'hms-app-notifications-read',
+  'hms-booking-notifications',
+  'hms-booking-notifications-read',
+  'hms-checkout-reminder-read',
+  'hms-notifications-active-user',
 ];
 
 /**
@@ -67,6 +75,9 @@ export const clearAllUserData = (): void => {
   const extraKeys = allKeys.filter(key => 
     key.startsWith('temp_') || 
     key.startsWith('cache_') || 
+    key.startsWith('hms-app-notifications') ||
+    key.startsWith('hms-booking-notifications') ||
+    key.startsWith('hms-checkout-reminder') ||
     key.includes('draft') ||
     key.includes('booking') ||
     key.includes('room') ||

@@ -64,7 +64,11 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://192.168.31.72:8080',
   'http://hotel-management-superadmin.s3-website.ap-south-1.amazonaws.com',
-  
+  // Capacitor Android / iOS WebView
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
 ];
 
 const corsOptions = {
@@ -75,6 +79,14 @@ const corsOptions = {
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      // Capacitor / WebView origins vary by OS version — allow localhost schemes
+      if (
+        /^https?:\/\/localhost(?::\d+)?$/i.test(origin) ||
+        /^capacitor:\/\//i.test(origin) ||
+        /^ionic:\/\//i.test(origin)
+      ) {
+        return callback(null, true);
+      }
       callback(new Error('Not allowed by CORS'));
     }
   },

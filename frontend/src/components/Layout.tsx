@@ -15,6 +15,7 @@ import { BasicPlanViewOnlyWrapper } from '@/components/BasicPlanViewOnlyWrapper'
 import CheckoutNotifications from '@/components/CheckoutNotifications';
 import MobileDraggableSidebar from '@/components/MobileDraggableSidebar';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
+import { clearNotificationsOnLogout } from '@/lib/notificationStore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import {
@@ -195,6 +196,7 @@ const Layout = ({ children }: LayoutProps) => {
     }
   }, [currentUser, API_URL, hotelLogo]);
   const handleLogout = () => {
+    clearNotificationsOnLogout();
     localStorage.removeItem('currentUser');
     localStorage.removeItem('authToken');
     localStorage.removeItem('hotelLogo');

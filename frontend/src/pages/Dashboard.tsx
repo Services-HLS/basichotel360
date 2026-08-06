@@ -61,6 +61,7 @@ import {
   getUserRole
 } from '@/lib/permissions';
 import { handleSubscriptionExpired } from '@/lib/subscription';
+import { clearNotificationsOnLogout } from '@/lib/notificationStore';
 import {
   LineChart as RechartsLineChart,
   Line,
@@ -277,6 +278,7 @@ async function fetchBackendData<T>(endpoint: string, options?: {
 
       if (isAuthError) {
         console.error('❌ Authentication failed - Token may be expired');
+        clearNotificationsOnLogout();
         localStorage.removeItem('authToken');
         localStorage.removeItem('currentUser');
         localStorage.removeItem('hotelLogo');
@@ -1246,6 +1248,7 @@ const Dashboard = () => {
 
               // Clear storage and redirect to login
               setTimeout(() => {
+                clearNotificationsOnLogout();
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('currentUser');
                 navigate('/login');
@@ -1978,6 +1981,7 @@ const Dashboard = () => {
 
   // Handle logout
   const handleLogout = () => {
+    clearNotificationsOnLogout();
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
     navigate('/login');

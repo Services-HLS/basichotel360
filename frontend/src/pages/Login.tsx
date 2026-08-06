@@ -1743,6 +1743,7 @@ import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
 import AuthService from "@/lib/auth";
 import { initNotificationServices } from "@/lib/notificationInit";
 import { refreshPushRegistration } from "@/lib/pushNotificationService";
+import { bindNotificationsToLoggedInUser, clearNotificationsOnLogout } from "@/lib/notificationStore";
 
 const NODE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -1790,6 +1791,7 @@ useEffect(() => {
         } else {
           console.log("❌ Session invalid, clearing data");
           // Clear invalid session data
+          clearNotificationsOnLogout();
           localStorage.removeItem('authToken');
           localStorage.removeItem('currentUser');
           localStorage.removeItem('hotelLogo');
@@ -1798,6 +1800,7 @@ useEffect(() => {
       } catch (error) {
         console.error("❌ Session validation error:", error);
         // Clear potentially corrupted session
+        clearNotificationsOnLogout();
         localStorage.removeItem('authToken');
         localStorage.removeItem('currentUser');
         localStorage.removeItem('hotelLogo');
@@ -2139,6 +2142,7 @@ const DatabaseLoginForm = () => {
       localStorage.setItem("currentUser", JSON.stringify(userData));
       localStorage.setItem("authToken", data.token);
 
+      bindNotificationsToLoggedInUser();
       void initNotificationServices().then(() => refreshPushRegistration());
 
       // Show welcome message based on trial status
