@@ -485,7 +485,7 @@ const Dashboard = () => {
   const [showAllRecentBookings, setShowAllRecentBookings] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [reactivationAmount, setReactivationAmount] = useState<number>(999);
+  const [reactivationAmount, setReactivationAmount] = useState<number>(599);
   const [chartView, setChartView] = useState<'line' | 'bar'>('line');
   const [chartPeriod, setChartPeriod] = useState<'1month' | '3months' | '6months'>('1month');
 
@@ -622,7 +622,7 @@ const Dashboard = () => {
     if (user?.customReactivationAmount) {
       setReactivationAmount(user.customReactivationAmount);
     } else {
-      setReactivationAmount(999); // Default fallback
+      setReactivationAmount(599); // Default fallback
     }
     console.log("👤 Current user:", user);
 
@@ -1213,7 +1213,7 @@ const Dashboard = () => {
       // Step 3: Open Razorpay checkout
       const options: RazorpayOptions = {
         key: razorpayKey,
-        amount: orderData.data.amount, // Already in paise (99900)
+        amount: orderData.data.amount, // Already in paise (e.g. 59900)
         currency: orderData.data.currency || 'INR',
         name: "Hotel Management System",
         description: "PRO Plan Reactivation (6 Months Access)",
@@ -2323,7 +2323,7 @@ const Dashboard = () => {
                   ) : trialInfo.status === 'warning' ? (
                     <>
                       <CreditCard className="w-3 h-3 mr-1" />
-                      Pay ₹999 to Extend
+                      Pay ₹{reactivationAmount} to Extend
                     </>
                   ) : (
                     'Learn More'

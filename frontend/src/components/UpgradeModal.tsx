@@ -213,7 +213,7 @@ const UpgradeModal = ({ open, onClose, currentHotel }: UpgradeModalProps) => {
                 <div className="text-center p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-white">
                   <Star className="w-12 h-12 mx-auto mb-4" fill="white" />
                   <h3 className="text-2xl font-bold mb-2">Pro Plan</h3>
-                  <div className="text-3xl font-bold">₹999<span className="text-lg">/month</span></div>
+                  <div className="text-3xl font-bold">₹599<span className="text-lg">/month</span></div>
                   {/* <p className="text-blue-100 mt-2">14-day free trial • No credit card required</p> */}
                 </div>
 
@@ -355,7 +355,7 @@ const UpgradeModal = ({ open, onClose, currentHotel }: UpgradeModalProps) => {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
                   <span>Pro Plan Subscription</span>
-                  <span className="font-semibold">₹999/month</span>
+                  <span className="font-semibold">₹599/month</span>
                 </div>
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>14-day free trial</span>

@@ -657,7 +657,7 @@ reactivateOrder: async (req, res) => {
     }
 
     // Check if there's a custom amount set by superadmin
-    let amount = 99900; // Default ₹999 in paise
+    let amount = 59900; // Default ₹599 in paise
     if (hotelData.custom_reactivation_amount) {
       amount = hotelData.custom_reactivation_amount * 100; // Convert to paise
     }
@@ -889,7 +889,7 @@ verifyReactivation: async (req, res) => {
         id: razorpay_payment_id, 
         status: 'captured',
         method: 'unknown',
-        amount: 99900
+        amount: 59900
       };
     }
 

@@ -102,7 +102,7 @@ const authController = {
       }
 
       // Get custom reactivation amount
-      let customReactivationAmount = 999; // Default
+      let customReactivationAmount = 599; // Default
       if (hotel.custom_reactivation_amount) {
         customReactivationAmount = hotel.custom_reactivation_amount;
       }

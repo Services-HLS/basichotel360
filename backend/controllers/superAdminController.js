@@ -1280,7 +1280,7 @@ getReactivationAmount: async (req, res) => {
       [hotelId]
     );
 
-    const amount = result[0]?.custom_reactivation_amount || 999; // Default to 999
+    const amount = result[0]?.custom_reactivation_amount || 599; // Default to 599
 
     res.json({
       success: true,

@@ -41,6 +41,7 @@ import {
   Ban,
   ArrowLeft,
   Waypoints,
+  Crown,
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '@/components/Logo';
@@ -403,6 +404,13 @@ const Layout = ({ children }: LayoutProps) => {
   // Other navigation items (visible based on permissions)
   const otherNavItems = [
     {
+      path: '/upgrade',
+      icon: Crown,
+      label: 'Upgrade to Pro (Pay to use HMS services)',
+      requires: 'view_dashboard',
+      highlight: true,
+    },
+    {
       path: '/refund-management',
       icon: Ban,
       label: 'Cancellations & Refunds',
@@ -519,8 +527,12 @@ const Layout = ({ children }: LayoutProps) => {
     }
     if (
       isBasicDbUser &&
-      (item.path === '/settings' || item.path === '/contact')
+      (item.path === '/settings' || item.path === '/contact' || item.path === '/upgrade')
     ) {
+      return true;
+    }
+
+    if (item.path === '/upgrade') {
       return true;
     }
 

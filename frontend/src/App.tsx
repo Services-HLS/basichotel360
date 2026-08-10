@@ -509,7 +509,7 @@ const App = () => {
 
     // Check initial auth state
     const checkInitialAuth = async () => {
-      const publicRoutes = ['/login', '/forgot-password', '/reset-password', '/contact', '/upgrade'];
+      const publicRoutes = ['/login', '/forgot-password', '/reset-password', '/contact', '/upgrade', '/privacy', '/terms', '/refund-policy'];
       const isPublicRoute = publicRoutes.some(route =>
         window.location.pathname.startsWith(route)
       );
@@ -634,23 +634,11 @@ const App = () => {
                 </AuthProtectedRoute>
               } />
 
-              <Route path="/refund-policy" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <RefundPolicy />
-                </AuthProtectedRoute>
-              } />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
 
-              <Route path="/privacy" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <PrivacyPolicy />
-                </AuthProtectedRoute>
-              } />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
 
-              <Route path="/terms" element={
-                <AuthProtectedRoute requiredPermission="view_dashboard">
-                  <TermsAndConditions />
-                </AuthProtectedRoute>
-              } />
+              <Route path="/terms" element={<TermsAndConditions />} />
 
               <Route path="/settings" element={
                 <AuthProtectedRoute requiredPermission="manage_hotel_settings">

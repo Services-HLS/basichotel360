@@ -1308,54 +1308,65 @@ export default function MultiRoomBookingForm({
     };
   };
 
+  const discountPresetBtnClass =
+    'h-auto w-full min-w-0 px-1.5 py-2 text-[11px] sm:px-3 sm:text-sm leading-tight whitespace-normal break-words';
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl">
-            <Bed className="h-6 w-6" />
-            Book Multiple Rooms ({selectedRooms.length} rooms)
+      <DialogContent className="max-w-5xl w-[95vw] sm:w-full max-h-[90vh] overflow-x-hidden overflow-y-auto p-3 sm:p-6">
+        <DialogHeader className="pr-8 text-left space-y-2">
+          <DialogTitle className="flex items-start gap-2 text-base sm:text-2xl leading-snug">
+            <Bed className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 mt-0.5" />
+            <span className="min-w-0 break-words">
+              Book Multiple Rooms ({selectedRooms.length} rooms)
+            </span>
           </DialogTitle>
+        </DialogHeader>
 
-          <div className="flex justify-between items-center mt-2 flex-wrap gap-2">
-            {!discountApplied ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setShowDiscountInput(!showDiscountInput)}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-              >
-                <Gift className="h-4 w-4" />
-                Apply Discount to All Rooms
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={removeDiscountFromAllRooms}
-                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
-              >
-                <X className="h-4 w-4" />
+        <div className="flex flex-col gap-2 min-w-0">
+          {!discountApplied && !showDiscountInput ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowDiscountInput(true)}
+              className="flex w-full sm:w-auto items-center justify-center gap-2 bg-green-600 hover:bg-green-700"
+            >
+              <Gift className="h-4 w-4 shrink-0" />
+              Apply Discount to All Rooms
+            </Button>
+          ) : null}
+
+          {discountApplied ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={removeDiscountFromAllRooms}
+              className="flex w-full sm:w-auto items-center justify-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+            >
+              <X className="h-4 w-4 shrink-0" />
+              <span className="truncate">
                 Remove Discount ({discountType === 'percentage'
-                  ? `${discountApplied ? (useCustomDiscount ? customDiscountPercentage : discountPercentage) : 0}%`
-                  : `₹${discountApplied ? (useCustomDiscount ? customDiscountAmount : discountAmount) : 0}`
+                  ? `${useCustomDiscount ? customDiscountPercentage : discountPercentage}%`
+                  : `₹${useCustomDiscount ? customDiscountAmount : discountAmount}`
                 })
-              </Button>
-            )}
-          </div>
+              </span>
+            </Button>
+          ) : null}
 
           {showDiscountInput && !discountApplied && (
-            <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <Gift className="h-5 w-5 text-green-600" />
-                <h4 className="font-semibold text-green-800">Apply Discount to All Rooms</h4>
+            <div className="mt-1 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 mb-3 min-w-0">
+                <Gift className="h-5 w-5 text-green-600 shrink-0" />
+                <h4 className="font-semibold text-green-800 text-sm sm:text-base truncate">
+                  Apply Discount to All Rooms
+                </h4>
               </div>
 
-              <div className="flex gap-2 mb-4 bg-white rounded-lg p-1 w-full sm:w-fit">
+              <div className="grid grid-cols-2 gap-1.5 mb-4 bg-white rounded-lg p-1 w-full">
                 <button
                   type="button"
                   onClick={() => setDiscountType('percentage')}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-md transition-all whitespace-nowrap ${discountType === 'percentage'
+                  className={`px-2 py-2 text-[11px] sm:text-sm rounded-md transition-all ${discountType === 'percentage'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -1365,7 +1376,7 @@ export default function MultiRoomBookingForm({
                 <button
                   type="button"
                   onClick={() => setDiscountType('amount')}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-md transition-all whitespace-nowrap ${discountType === 'amount'
+                  className={`px-2 py-2 text-[11px] sm:text-sm rounded-md transition-all ${discountType === 'amount'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -1374,7 +1385,7 @@ export default function MultiRoomBookingForm({
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {discountType === 'percentage' && (
                   <>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1386,7 +1397,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(10);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
                         10% OFF
                       </Button>
@@ -1398,7 +1409,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(15);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
                         15% OFF
                       </Button>
@@ -1410,7 +1421,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountPercentage(20);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
                         20% OFF
                       </Button>
@@ -1422,7 +1433,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(true);
                           setCustomDiscountPercentage(25);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
                         Custom
                       </Button>
@@ -1430,7 +1441,7 @@ export default function MultiRoomBookingForm({
 
                     {useCustomDiscount && (
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <Label htmlFor="customDiscountMulti" className="whitespace-nowrap shrink-0">
+                        <Label htmlFor="customDiscountMulti" className="shrink-0 text-sm">
                           Discount Percentage:
                         </Label>
                         <div className="relative w-full sm:flex-1">
@@ -1455,7 +1466,7 @@ export default function MultiRoomBookingForm({
 
                 {discountType === 'amount' && (
                   <>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
                         type="button"
                         variant={!useCustomDiscount && discountAmount === 500 ? "default" : "outline"}
@@ -1464,9 +1475,10 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(500);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
-                        ₹500 OFF
+                        <span className="sm:hidden">₹500</span>
+                        <span className="hidden sm:inline">₹500 OFF</span>
                       </Button>
                       <Button
                         type="button"
@@ -1476,9 +1488,10 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(1000);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
-                        ₹1000 OFF
+                        <span className="sm:hidden">₹1000</span>
+                        <span className="hidden sm:inline">₹1000 OFF</span>
                       </Button>
                       <Button
                         type="button"
@@ -1488,9 +1501,10 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(1500);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
-                        ₹1500 OFF
+                        <span className="sm:hidden">₹1500</span>
+                        <span className="hidden sm:inline">₹1500 OFF</span>
                       </Button>
                       <Button
                         type="button"
@@ -1500,9 +1514,10 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(false);
                           setDiscountAmount(2000);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap"
+                        className={discountPresetBtnClass}
                       >
-                        ₹2000 OFF
+                        <span className="sm:hidden">₹2000</span>
+                        <span className="hidden sm:inline">₹2000 OFF</span>
                       </Button>
                       <Button
                         type="button"
@@ -1512,7 +1527,7 @@ export default function MultiRoomBookingForm({
                           setUseCustomDiscount(true);
                           setCustomDiscountAmount(100);
                         }}
-                        className="w-full min-w-0 text-xs sm:text-sm whitespace-nowrap col-span-2 sm:col-span-1"
+                        className={`${discountPresetBtnClass} col-span-2`}
                       >
                         Custom
                       </Button>
@@ -1520,7 +1535,7 @@ export default function MultiRoomBookingForm({
 
                     {useCustomDiscount && (
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <Label htmlFor="customDiscountAmount" className="whitespace-nowrap shrink-0">
+                        <Label htmlFor="customDiscountAmount" className="shrink-0 text-sm">
                           Discount Amount (₹):
                         </Label>
                         <div className="relative w-full sm:flex-1">
@@ -1541,25 +1556,25 @@ export default function MultiRoomBookingForm({
                   </>
                 )}
 
-                <div className="mt-3 p-3 bg-white rounded-lg border border-green-200">
+                <div className="mt-3 p-3 bg-white rounded-lg border border-green-200 min-w-0">
                   <div className="text-sm font-medium text-green-800 mb-2">Discount Preview:</div>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Subtotal (All Rooms):</span>
-                      <span>₹{selectedRooms.reduce((total, room) => total + (room.price * nights), 0).toFixed(2)}</span>
+                  <div className="space-y-1 text-xs sm:text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-gray-600 shrink-0">Subtotal (All Rooms):</span>
+                      <span className="text-right break-all">₹{selectedRooms.reduce((total, room) => total + (room.price * nights), 0).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-green-700">
-                      <span>Discount Applied:</span>
-                      <span>
+                    <div className="flex justify-between gap-2 text-green-700">
+                      <span className="shrink-0">Discount Applied:</span>
+                      <span className="text-right">
                         {discountType === 'percentage'
                           ? `- ${useCustomDiscount ? customDiscountPercentage : discountPercentage}%`
                           : `- ₹${useCustomDiscount ? customDiscountAmount : discountAmount}`
                         }
                       </span>
                     </div>
-                    <div className="border-t pt-1 mt-1 flex justify-between font-bold">
-                      <span>After Discount:</span>
-                      <span className="text-green-600">
+                    <div className="border-t pt-1 mt-1 flex justify-between gap-2 font-bold">
+                      <span className="shrink-0">After Discount:</span>
+                      <span className="text-green-600 text-right break-all">
                         ₹{discountType === 'percentage'
                           ? (selectedRooms.reduce((total, room) => total + (room.price * nights), 0) *
                             (1 - (useCustomDiscount ? customDiscountPercentage : discountPercentage) / 100)).toFixed(2)
@@ -1571,10 +1586,11 @@ export default function MultiRoomBookingForm({
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => setShowDiscountInput(false)}
                   >
                     Cancel
@@ -1583,7 +1599,7 @@ export default function MultiRoomBookingForm({
                     variant="default"
                     size="sm"
                     onClick={applyDiscountToAllRooms}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
                   >
                     Apply Discount
                   </Button>
@@ -1593,14 +1609,14 @@ export default function MultiRoomBookingForm({
           )}
 
           {discountApplied && (
-            <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="mt-1 p-2 bg-green-100 border border-green-300 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
+              <div className="flex items-start gap-2 min-w-0">
                 {discountType === 'percentage' ? (
-                  <Percent className="h-4 w-4 text-green-600" />
+                  <Percent className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                 ) : (
-                  <IndianRupee className="h-4 w-4 text-green-600" />
+                  <IndianRupee className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                 )}
-                <span className="text-sm font-medium text-green-800">
+                <span className="text-xs sm:text-sm font-medium text-green-800 break-words">
                   {discountType === 'percentage'
                     ? `${useCustomDiscount ? customDiscountPercentage : discountPercentage}% Discount Applied to All Rooms!`
                     : `₹${useCustomDiscount ? customDiscountAmount : discountAmount} Discount Applied to All Rooms!`
@@ -1611,13 +1627,13 @@ export default function MultiRoomBookingForm({
                 variant="ghost"
                 size="sm"
                 onClick={removeDiscountFromAllRooms}
-                className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 self-end sm:self-auto"
               >
                 <X className="h-3 w-3" />
               </Button>
             </div>
           )}
-        </DialogHeader>
+        </div>
 
         {!isCheckingAvailability && availableRoomsCount < selectedRooms.length && (
           <Alert className="bg-yellow-50 border-yellow-200">
@@ -1638,44 +1654,42 @@ export default function MultiRoomBookingForm({
           </Alert>
         )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="relative mb-6">
-            <div className="overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:overflow-visible sm:pb-0 sm:mx-0 sm:px-0">
-              <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4 gap-1 sm:gap-0 bg-transparent sm:bg-muted p-0 sm:p-1">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+          <div className="relative mb-4 sm:mb-6 min-w-0">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 gap-1 h-auto bg-muted p-1">
                 <TabsTrigger
                   value="customer"
-                  className="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 rounded-md whitespace-nowrap"
+                  className="px-2 sm:px-4 py-2 text-[11px] sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
                 >
-                  <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
                   <span className="hidden sm:inline">1. Customer Details</span>
                   <span className="sm:hidden">Customer</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="idproof"
-                  className="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 rounded-md whitespace-nowrap"
+                  className="px-2 sm:px-4 py-2 text-[11px] sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
                 >
-                  <FileImage className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <FileImage className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
                   <span className="hidden sm:inline">2. ID Proof Upload</span>
                   <span className="sm:hidden">ID Proof</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="rooms"
-                  className="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 rounded-md whitespace-nowrap"
+                  className="px-2 sm:px-4 py-2 text-[11px] sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
                 >
-                  <Bed className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <Bed className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
                   <span className="hidden sm:inline">3. Room Configuration</span>
                   <span className="sm:hidden">Rooms</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="payment"
-                  className="flex-shrink-0 px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 rounded-md whitespace-nowrap"
+                  className="px-2 sm:px-4 py-2 text-[11px] sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
                 >
-                  <CreditCard className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <CreditCard className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
                   <span className="hidden sm:inline">4. Payment & Summary</span>
                   <span className="sm:hidden">Payment</span>
                 </TabsTrigger>
               </TabsList>
-            </div>
           </div>
 
           <TabsContent value="customer" className="space-y-6">

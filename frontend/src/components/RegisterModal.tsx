@@ -7934,7 +7934,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       { text: "POS optional integration", included: true },
       { text: "WhatsApp & call support", included: true },
       { text: "Go live in less than 1 hour", included: true },
-      { text: "15-day FREE trial, then ₹999 / 6 months", included: true }
+      { text: "Pro-599 / Month excluding taxes", included: true }
     ],
     enterprise: [
       { text: "Chain-level PMS & coordination", included: true },
@@ -8182,7 +8182,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
                   ⭐ PRO Plan — 15 Days FREE Trial
                 </p>
                 <p className="text-[10px] sm:text-xs text-white/85 mt-0.5">
-                  Trial starts now. After trial ends, subscription is ₹999/6 months.
+                  Trial starts now. After trial ends, subscription is ₹599/month.
                 </p>
               </div>
             )}

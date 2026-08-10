@@ -917,7 +917,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
       { text: "POS optional integration", included: true },
       { text: "WhatsApp & call support", included: true },
       { text: "Go live in less than 1 hour", included: true },
-      { text: "15-day FREE trial, then ₹999 / 6 months", included: true }
+      { text: "Pro-599 / Month excluding taxes", included: true }
     ],
     enterprise: [
       { text: "Chain-level PMS & coordination", included: true },

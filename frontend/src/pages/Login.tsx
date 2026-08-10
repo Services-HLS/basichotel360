@@ -1950,6 +1950,19 @@ useEffect(() => {
                    Hithlaksh Solutions Private Limited
                  </span>
                </a>
+               <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-white/70">
+                 <Link to="/privacy" className="hover:text-white transition-colors">
+                   Privacy
+                 </Link>
+                 <span className="text-white/30">|</span>
+                 <Link to="/terms" className="hover:text-white transition-colors">
+                   Terms &amp; Conditions
+                 </Link>
+                 <span className="text-white/30">|</span>
+                 <Link to="/refund-policy" className="hover:text-white transition-colors">
+                   Refund Policy
+                 </Link>
+               </div>
              </div>
           ) : (
             <>
@@ -1979,11 +1992,23 @@ useEffect(() => {
                   Hithlaksh Solutions Private Limited
                 </span>
               </a>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-white/70">
+                <Link to="/privacy" className="hover:text-white transition-colors">
+                  Privacy
+                </Link>
+                <span className="text-white/30">|</span>
+                <Link to="/terms" className="hover:text-white transition-colors">
+                  Terms &amp; Conditions
+                </Link>
+                <span className="text-white/30">|</span>
+                <Link to="/refund-policy" className="hover:text-white transition-colors">
+                  Refund Policy
+                </Link>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
-
 
       <RegisterModal
         open={showRegisterModal}

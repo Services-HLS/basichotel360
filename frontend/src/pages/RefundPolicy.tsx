@@ -1,4 +1,4 @@
-import Layout from '@/components/Layout';
+import LegalPageShell from '@/components/LegalPageShell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -77,7 +77,7 @@ const sections = [
 
 export default function RefundPolicy() {
   return (
-    <Layout>
+    <LegalPageShell>
       <div className="page-shell mx-auto max-w-4xl pb-8 space-y-6">
         <div className="space-y-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl flex items-center gap-2">
@@ -147,6 +147,6 @@ export default function RefundPolicy() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </LegalPageShell>
   );
 }

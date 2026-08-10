@@ -7133,12 +7133,12 @@ const Bookings = () => {
               {checkoutBooking.status === 'booked' && (
               <>
               {/* Tabs for checkout options */}
-              <div className="flex border-b text-sm shrink-0">
+              <div className="grid grid-cols-3 border-b text-[11px] sm:text-sm shrink-0 min-w-0">
                 <button
                   type="button"
                   disabled={isBasicDbUser}
                   className={cn(
-                    "flex-1 py-3 text-center font-medium border-b-2 transition-colors",
+                    "min-w-0 px-1 py-2.5 sm:py-3 text-center font-medium border-b-2 transition-colors leading-tight",
                     isBasicDbUser && "opacity-50 cursor-not-allowed",
                     checkoutActiveTab === 'services' ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
@@ -7154,13 +7154,14 @@ const Bookings = () => {
                   }}
                   title={isBasicDbUser ? 'Pro feature — upgrade to unlock' : undefined}
                 >
-                  Additional Services
+                  <span className="block sm:hidden">Services</span>
+                  <span className="hidden sm:block">Additional Services</span>
                 </button>
                 <button
                   type="button"
                   disabled={isBasicDbUser}
                   className={cn(
-                    "flex-1 py-3 text-center font-medium border-b-2 transition-colors",
+                    "min-w-0 px-1 py-2.5 sm:py-3 text-center font-medium border-b-2 transition-colors leading-tight",
                     isBasicDbUser && "opacity-50 cursor-not-allowed",
                     checkoutActiveTab === 'discount' ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
@@ -7181,7 +7182,7 @@ const Bookings = () => {
                 <button
                   type="button"
                   className={cn(
-                    "flex-1 py-3 text-center font-medium border-b-2 transition-colors",
+                    "min-w-0 px-1 py-2.5 sm:py-3 text-center font-medium border-b-2 transition-colors leading-tight",
                     checkoutActiveTab === 'payment' ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setCheckoutActiveTab('payment')}
@@ -7190,7 +7191,7 @@ const Bookings = () => {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto flex-1 min-h-0 space-y-6">
+              <div className="p-3 sm:p-6 overflow-y-auto overflow-x-hidden flex-1 min-h-0 space-y-6">
                 {checkoutActiveTab === 'services' && (
                   <div className="space-y-4">
                     <div className="space-y-2 border p-4 rounded-lg bg-gray-50/55">
@@ -7270,14 +7271,14 @@ const Bookings = () => {
 
                 {checkoutActiveTab === 'discount' && (
                   <div className="space-y-4">
-                    <div className="space-y-2 border p-4 rounded-lg bg-gray-50/55">
+                    <div className="space-y-2 border p-3 sm:p-4 rounded-lg bg-gray-50/55 min-w-0 overflow-hidden">
                       <Label className="font-semibold text-sm">Discount Configuration</Label>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-3 min-w-0">
                         <Button
                           type="button"
                           variant={checkoutDiscountType === 'none' ? 'default' : 'outline'}
                           onClick={() => { setCheckoutDiscountType('none'); setCheckoutDiscountValue(0); }}
-                          className="h-9 text-xs animate-none"
+                          className="h-auto min-h-9 w-full min-w-0 px-2 py-2 text-xs sm:text-sm whitespace-normal leading-tight animate-none"
                         >
                           No Discount
                         </Button>
@@ -7285,7 +7286,7 @@ const Bookings = () => {
                           type="button"
                           variant={checkoutDiscountType === 'percentage' ? 'default' : 'outline'}
                           onClick={() => { setCheckoutDiscountType('percentage'); setCheckoutDiscountValue(0); }}
-                          className="h-9 text-xs animate-none"
+                          className="h-auto min-h-9 w-full min-w-0 px-2 py-2 text-xs sm:text-sm whitespace-normal leading-tight animate-none"
                         >
                           Percentage (%)
                         </Button>
@@ -7293,7 +7294,7 @@ const Bookings = () => {
                           type="button"
                           variant={checkoutDiscountType === 'amount' ? 'default' : 'outline'}
                           onClick={() => { setCheckoutDiscountType('amount'); setCheckoutDiscountValue(0); }}
-                          className="h-9 text-xs animate-none"
+                          className="h-auto min-h-9 w-full min-w-0 px-2 py-2 text-xs sm:text-sm whitespace-normal leading-tight animate-none"
                         >
                           Fixed Amount (₹)
                         </Button>

@@ -1,4 +1,4 @@
-import Layout from '@/components/Layout';
+import LegalPageShell from '@/components/LegalPageShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -40,6 +40,7 @@ const sections = [
       'Trial periods, if offered, are limited in duration and may convert to paid access after expiry.',
       'Fees, renewals, and upgrades (if applicable) follow the plan details shown at purchase or upgrade.',
       'Non-payment or plan expiry may restrict access to PRO features.',
+      'Subscription/platform charges are indicative only and may be revised from time to time at the sole discretion of the Company. Any revised charges shall be communicated to the customer and will be applicable as per the updated pricing policy.',
     ],
   },
   {
@@ -76,7 +77,7 @@ const sections = [
 
 export default function TermsAndConditions() {
   return (
-    <Layout>
+    <LegalPageShell>
       <div className="page-shell mx-auto max-w-4xl pb-8 space-y-6">
         <div className="space-y-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl flex items-center gap-2">
@@ -132,6 +133,6 @@ export default function TermsAndConditions() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </LegalPageShell>
   );
 }

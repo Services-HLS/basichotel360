@@ -367,7 +367,7 @@
 //   const [showAllRecentBookings, setShowAllRecentBookings] = useState(false);
 //   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 //   const [showPaymentModal, setShowPaymentModal] = useState(false);
-//   const [reactivationAmount, setReactivationAmount] = useState<number>(999);
+//   const [reactivationAmount, setReactivationAmount] = useState<number>(599);
 //   // Check permissions
 //   const userPermissions = getUserPermissions();
 //   const userRole = getUserRole();
@@ -502,7 +502,7 @@
 //     if (user?.customReactivationAmount) {
 //       setReactivationAmount(user.customReactivationAmount);
 //     } else {
-//       setReactivationAmount(999); // Default fallback
+//       setReactivationAmount(599); // Default fallback
 //     }
 //     console.log("👤 Current user:", user);
 
@@ -1621,7 +1621,7 @@
 //                   ) : trialInfo.status === 'warning' ? (
 //                     <>
 //                       <CreditCard className="w-3 h-3 mr-1" />
-//                       Pay ₹999 to Extend
+//                       Pay ₹{reactivationAmount} to Extend
 //                     </>
 //                   ) : (
 //                     'Learn More'
@@ -2556,7 +2556,7 @@ const Dashboard = () => {
   const [showAllRecentBookings, setShowAllRecentBookings] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [reactivationAmount, setReactivationAmount] = useState<number>(999);
+  const [reactivationAmount, setReactivationAmount] = useState<number>(599);
   const [chartView, setChartView] = useState<'line' | 'bar'>('line');
   const [chartPeriod, setChartPeriod] = useState<'1month' | '3months' | '6months'>('1month');
 
@@ -2693,7 +2693,7 @@ const Dashboard = () => {
     if (user?.customReactivationAmount) {
       setReactivationAmount(user.customReactivationAmount);
     } else {
-      setReactivationAmount(999); // Default fallback
+      setReactivationAmount(599); // Default fallback
     }
     console.log("👤 Current user:", user);
 
@@ -4115,7 +4115,7 @@ const Dashboard = () => {
                   ) : trialInfo.status === 'warning' ? (
                     <>
                       <CreditCard className="w-3 h-3 mr-1" />
-                      Pay ₹999 to Extend
+                      Pay ₹{reactivationAmount} to Extend
                     </>
                   ) : (
                     'Learn More'
