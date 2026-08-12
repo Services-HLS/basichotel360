@@ -3,7 +3,7 @@
   Optimized for TWA (APK) and Standard PWA
 */
 
-const CACHE_NAME = "hms-v3.1"; // Increment this to force all clients to update
+const CACHE_NAME = "hms-v3.2"; // Bump to drop stale Vite dep caches
 const OFFLINE_URL = "/offline.html";
 
 const PRE_CACHE_RESOURCES = [
@@ -23,6 +23,16 @@ if (workbox) {
   self.skipWaiting();
   workbox.core.clientsClaim();
 
+  // Never cache Vite optimize-deps (breaks npm run dev after cache clear)
+  workbox.routing.registerRoute(
+    ({ url }) =>
+      url.pathname.includes("/node_modules/.vite/") ||
+      url.pathname.includes("/@vite/") ||
+      url.pathname.includes("/@fs/") ||
+      url.pathname.includes("/@id/"),
+    new workbox.strategies.NetworkOnly(),
+  );
+
   // 2. Clear Old Caches
   self.addEventListener("activate", (event) => {
     event.waitUntil(
@@ -36,12 +46,11 @@ if (workbox) {
     );
   });
 
-  // 3. Cache Hashed Assets (Vite/Build Assets)
-  // These are immutable, so we can use CacheFirst
+  // 3. Cache hashed production build assets only (not Vite dep chunks)
   workbox.routing.registerRoute(
     ({ url }) =>
       url.origin === self.location.origin &&
-      (url.pathname.startsWith("/assets/") || url.pathname.includes("-")),
+      url.pathname.startsWith("/assets/"),
     new workbox.strategies.CacheFirst({
       cacheName: "static-assets",
       plugins: [

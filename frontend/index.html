@@ -65,9 +65,26 @@
   });
   }
 
-  // Service worker code
+  // Service worker — disabled on Vite/dev so stale caches don't break HMR deps
   if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+  const isDevHost =
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    location.port === '8080' ||
+    location.port === '5173';
+
+  if (isDevHost) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+  regs.forEach((reg) => reg.unregister());
+  });
+  if (window.caches) {
+  caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+  }
+  console.log('🧹 Dev mode: service worker unregistered, caches cleared');
+  return;
+  }
+
   navigator.serviceWorker.register('/sw.js').then(reg => {
   console.log('🚀 Service Worker registered');
 
