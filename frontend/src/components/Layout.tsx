@@ -11,6 +11,7 @@ import {
   isBasicDatabaseUser,
   isBasicPlanViewOnlyPath,
 } from '@/lib/planUtils';
+import { isSubscriptionExpired } from '@/lib/subscription';
 import { BasicPlanViewOnlyWrapper } from '@/components/BasicPlanViewOnlyWrapper';
 import CheckoutNotifications from '@/components/CheckoutNotifications';
 import MobileDraggableSidebar from '@/components/MobileDraggableSidebar';
@@ -57,12 +58,15 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUser = getCurrentUser();
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const { badges: notificationBadges } = useNotificationCounts();
   const [isOpen, setIsOpen] = useState(false);
   const [incomeExpensesOpen, setIncomeExpensesOpen] = useState(false);
+  const [subscriptionLockTick, setSubscriptionLockTick] = useState(0);
+  // Re-read user after subscription:expired updates localStorage
+  void subscriptionLockTick;
+  const currentUser = getCurrentUser();
 
   const API_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -84,22 +88,19 @@ const Layout = ({ children }: LayoutProps) => {
   const isGoogleSheetsUser = currentUser?.source === 'google_sheets';
   const isBasicUser = isAnyBasicUser(currentUser);
   const isBasicDbUser = isBasicDatabaseUser(currentUser);
+  // Trial / subscription locked (expired PRO) — only Upgrade (and Contact) stay usable
+  const isSubscriptionLocked = isSubscriptionExpired(currentUser);
+  // Show Upgrade CTA for Basic users and locked / expired PRO accounts
+  const needsProUpgrade = isBasicUser || isSubscriptionLocked;
 
 
 
   useEffect(() => {
     const handleSubscriptionExpired = (event: any) => {
-      // Update user in state if needed
       if (event.detail?.user) {
-        // You might want to update some state here
+        // Force sidebar re-render so Upgrade activates and other tabs lock
+        setSubscriptionLockTick((n) => n + 1);
       }
-
-      // Optionally show a toast or notification
-      // toast({
-      //   title: "Trial Expired",
-      //   description: "Your trial has expired. Please reactivate your account.",
-      //   variant: "destructive"
-      // });
     };
 
     window.addEventListener('subscription:expired', handleSubscriptionExpired);
@@ -319,13 +320,22 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   // Full sidebar for all plans; Basic plan users see Pro items greyed out
+  const upgradeNavItem: NavItem = {
+    path: '/upgrade',
+    icon: Crown,
+    label: 'Upgrade to Pro (Pay to use HMS services)',
+    requires: 'view_dashboard',
+    highlight: true,
+  };
+
   const mainNavItems: NavItem[] = [
+    ...(needsProUpgrade ? [upgradeNavItem] : []),
     {
       path: '/roombooking',
       icon: Calendar,
       label: 'Book a Room',
       requires: 'create_booking',
-      highlight: true,
+      highlight: !needsProUpgrade,
     },
     {
       path: '/advance-bookings',
@@ -404,13 +414,6 @@ const Layout = ({ children }: LayoutProps) => {
   // Other navigation items (visible based on permissions)
   const otherNavItems = [
     {
-      path: '/upgrade',
-      icon: Crown,
-      label: 'Upgrade to Pro (Pay to use HMS services)',
-      requires: 'view_dashboard',
-      highlight: true,
-    },
-    {
       path: '/refund-management',
       icon: Ban,
       label: 'Cancellations & Refunds',
@@ -448,14 +451,25 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   const isNavItemDisabled = (item: NavItem) => {
+    if (item.path === '/upgrade' || item.path === '/contact') {
+      return !!item.disabled;
+    }
+    // Expired / suspended: block all other tabs until Pro is reactivated
+    if (isSubscriptionLocked) {
+      return true;
+    }
     return !!item.disabled;
   };
 
   const isNavItemViewOnly = (item: NavItem) => {
+    if (isSubscriptionLocked) return false;
     return isBasicDbUser && (item.proOnly || isBasicPlanViewOnlyPath(item.path));
   };
 
   const getNavDisabledTitle = (item: NavItem) => {
+    if (isSubscriptionLocked && item.path !== '/upgrade' && item.path !== '/contact') {
+      return 'Subscription expired — use Upgrade to Pro to continue';
+    }
     if (isNavItemViewOnly(item)) {
       return 'View-only on Basic plan — upgrade to Pro for full access';
     }
@@ -467,16 +481,31 @@ const Layout = ({ children }: LayoutProps) => {
 
   const getNavDisabledBadge = (item: NavItem) => {
     if (item.externalOta && !isOtaChannelManagerEnabled()) return 'Soon';
+    if (isSubscriptionLocked && item.path !== '/upgrade' && item.path !== '/contact') {
+      return 'Locked';
+    }
     if (isNavItemViewOnly(item)) return 'View';
     if (item.disabled) return '(Off)';
     return null;
   };
 
   const handleNavClick = (item: NavItem) => {
+    if (isSubscriptionLocked && item.path !== '/upgrade' && item.path !== '/contact') {
+      toast({
+        title: 'Subscription expired',
+        description: 'Other tabs are locked. Pay to upgrade / reactivate Pro to continue.',
+        variant: 'destructive',
+      });
+      handleNavigate('/upgrade');
+      return;
+    }
+
     if (isNavItemDisabled(item)) {
       toast({
         title: 'Unavailable',
-        description: 'Function Hall is disabled for this hotel.',
+        description: item.disabled
+          ? 'Function Hall is disabled for this hotel.'
+          : 'Please upgrade or reactivate Pro to use this feature.',
       });
       return;
     }
@@ -532,8 +561,9 @@ const Layout = ({ children }: LayoutProps) => {
       return true;
     }
 
+    // Upgrade to Pro: only Basic / trial-expired / suspended accounts
     if (item.path === '/upgrade') {
-      return true;
+      return needsProUpgrade;
     }
 
     if (isAdmin() && !isBasicUser) return true;
@@ -637,19 +667,38 @@ const Layout = ({ children }: LayoutProps) => {
     if (isGoogleSheetsUser && !isBasicDbUser) return null;
 
     const viewOnly = incomeExpensesViewOnly;
-    const expanded = incomeExpensesOpen || isInIncomeExpenses();
+    const locked = isSubscriptionLocked;
+    const expanded = !locked && (incomeExpensesOpen || isInIncomeExpenses());
     const sectionActive = isInIncomeExpenses();
 
     return (
       <div>
         <button
           type="button"
-          onClick={() => setIncomeExpensesOpen(!incomeExpensesOpen)}
+          onClick={() => {
+            if (locked) {
+              toast({
+                title: 'Subscription expired',
+                description: 'Other tabs are locked. Pay to upgrade / reactivate Pro to continue.',
+                variant: 'destructive',
+              });
+              handleNavigate('/upgrade');
+              return;
+            }
+            setIncomeExpensesOpen(!incomeExpensesOpen);
+          }}
           className={cn(
             'group w-full flex items-center justify-between rounded-xl px-2.5 py-2.5 transition-all duration-200',
-            sectionActive ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/70'
+            locked && 'cursor-not-allowed opacity-50',
+            !locked && sectionActive ? 'bg-primary/10 text-primary' : !locked && 'text-foreground hover:bg-muted/70'
           )}
-          title={viewOnly ? 'View-only on Basic plan' : ''}
+          title={
+            locked
+              ? 'Subscription expired — use Upgrade to Pro'
+              : viewOnly
+                ? 'View-only on Basic plan'
+                : ''
+          }
         >
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-sky-500 text-white shadow-sm">
@@ -658,16 +707,22 @@ const Layout = ({ children }: LayoutProps) => {
             <span className={cn('font-medium', compact ? 'text-sm' : 'text-sm')}>Income & Expenses</span>
           </div>
           <div className="flex items-center gap-2">
-            {viewOnly && (
+            {locked && (
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                Locked
+              </span>
+            )}
+            {!locked && viewOnly && (
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
                 View
               </span>
             )}
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
+            {!locked &&
+              (expanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              ))}
           </div>
         </button>
 

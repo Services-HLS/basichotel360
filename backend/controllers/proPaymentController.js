@@ -312,10 +312,10 @@ const proPaymentController = {
     }
   },
 
-  /** Basic → Pro: create Razorpay order (monthly ₹499 / yearly ₹4,788) */
+  /** Basic → Pro: create Razorpay order (monthly ₹599) */
   createUpgradeOrder: async (req, res) => {
     try {
-      const billingPeriod = req.body.billing_period === 'yearly' ? 'yearly' : 'monthly';
+      const billingPeriod = 'monthly';
       const hotelId = req.user.hotel_id;
       const pricing = getUpgradePricing(billingPeriod);
 

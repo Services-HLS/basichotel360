@@ -581,7 +581,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
     }
 
     // Auto-generate missing fields for backend validation if they were removed from UI
-    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
     const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
     const autoAdminName = formData.adminName || formData.username;
 
@@ -649,7 +649,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
       return;
     }
 
-    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 
     setIsVerifyingEmailOTP(true);
     try {
@@ -735,7 +735,7 @@ const RegisterModal = ({ open, onClose, onTryDemo }: RegisterModalProps) => {
 
     try {
       const cleanPhone = formData.phone.replace(/\D/g, '');
-      const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+      const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
       const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
       const autoAdminName = formData.adminName || formData.username;
       const autoAddress = formData.address || 'Address not provided';

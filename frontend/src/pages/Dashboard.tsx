@@ -2112,6 +2112,18 @@ const Dashboard = () => {
                   )}
                 </Button>
 
+                <Button
+                  variant="outline"
+                  className="w-full h-10 border-amber-300 text-amber-800 hover:bg-amber-50 text-sm"
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    navigate('/upgrade');
+                  }}
+                  disabled={isProcessingPayment}
+                >
+                  Open Upgrade to Pro
+                </Button>
+
                 <div className="flex gap-2">
                   <Button
                     variant="outline"

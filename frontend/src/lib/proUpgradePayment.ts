@@ -1,8 +1,7 @@
-export type ProBillingPeriod = 'monthly' | 'yearly';
+export type ProBillingPeriod = 'monthly';
 
 export const PRO_UPGRADE_PRICES = {
-  monthly: { amountRupees: 499, label: '1 month', billingPeriod: 'monthly' as const },
-  yearly: { amountRupees: 4788, label: '1 year', billingPeriod: 'yearly' as const },
+  monthly: { amountRupees: 599, label: '1 month', billingPeriod: 'monthly' as const },
 };
 
 export const loadRazorpayScript = (): Promise<boolean> =>
@@ -25,7 +24,7 @@ interface RazorpaySuccessResponse {
 }
 
 export async function startProUpgradeCheckout(
-  billingPeriod: ProBillingPeriod,
+  billingPeriod: ProBillingPeriod = 'monthly',
   user: {
     hotel_id?: number | string;
     hotelName?: string;
@@ -56,7 +55,7 @@ export async function startProUpgradeCheckout(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ billing_period: billingPeriod }),
+    body: JSON.stringify({ billing_period: 'monthly' }),
   });
 
   const orderData = await orderResponse.json().catch(() => ({}));
@@ -66,7 +65,7 @@ export async function startProUpgradeCheckout(
 
   await new Promise((r) => setTimeout(r, 400));
 
-  const pricing = PRO_UPGRADE_PRICES[billingPeriod];
+  const pricing = PRO_UPGRADE_PRICES.monthly;
 
   return new Promise((resolve, reject) => {
     const options = {
@@ -88,7 +87,7 @@ export async function startProUpgradeCheckout(
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-              billing_period: billingPeriod,
+              billing_period: 'monthly',
             }),
           });
           const verifyData = await verifyResponse.json();
@@ -107,7 +106,7 @@ export async function startProUpgradeCheckout(
       },
       notes: {
         type: 'pro_upgrade',
-        billing_period: billingPeriod,
+        billing_period: 'monthly',
         hotel_id: String(user.hotel_id || ''),
         hotel_name: user.hotelName || '',
       },

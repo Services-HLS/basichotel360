@@ -64,7 +64,7 @@ export default function UpgradePage() {
             <div className="flex justify-between">
               <CardTitle className="text-xl font-bold text-primary">Pro Plan</CardTitle>
               <span className="text-sm bg-primary text-white px-3 py-1 rounded-full">
-                from ₹499/month
+                from ₹599/month
               </span>
             </div>
           </CardHeader>
@@ -92,7 +92,7 @@ export default function UpgradePage() {
             </ul>
 
             <p className="text-xs text-muted-foreground text-center">
-              ₹499 / month · ₹4,788 / year (save vs monthly)
+              ₹599 / month excluding taxes
             </p>
             <Button
               className="w-full"

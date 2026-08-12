@@ -2,23 +2,16 @@
 const PRO_UPGRADE_PRICES = {
   monthly: {
     billingPeriod: 'monthly',
-    amountPaise: 49900,
-    amountRupees: 499,
+    amountPaise: 59900,
+    amountRupees: 599,
     months: 1,
     label: '1 month',
-  },
-  yearly: {
-    billingPeriod: 'yearly',
-    amountPaise: 478800,
-    amountRupees: 4788,
-    months: 12,
-    label: '1 year',
   },
 };
 
 function getUpgradePricing(billingPeriod) {
-  const key = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
-  return PRO_UPGRADE_PRICES[key];
+  // Yearly plan removed — always charge monthly ₹599
+  return PRO_UPGRADE_PRICES.monthly;
 }
 
 function addMonths(date, months) {

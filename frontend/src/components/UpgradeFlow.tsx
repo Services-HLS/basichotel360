@@ -20,30 +20,160 @@ import {
 import {
   PRO_UPGRADE_PRICES,
   startProUpgradeCheckout,
+  loadRazorpayScript,
   type ProBillingPeriod,
 } from '@/lib/proUpgradePayment';
+import { clearNotificationsOnLogout } from '@/lib/notificationStore';
 
 const UpgradeFlow = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const currentUser = getCurrentUser();
-  const [billingPeriod, setBillingPeriod] = useState<ProBillingPeriod>('monthly');
+  const [billingPeriod] = useState<ProBillingPeriod>('monthly');
   const [isPaying, setIsPaying] = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
 
   const isLoggedIn = Boolean(localStorage.getItem('authToken') && currentUser);
   const isSheetsBasic = isGoogleSheetsBasicUser(currentUser);
   const isDbBasic = isBasicDatabaseUser(currentUser);
-  const canUpgrade = isLoggedIn && isDbBasic && !isSheetsBasic;
+  const needsReactivation =
+    currentUser?.status === 'suspended' || currentUser?.isTrialExpired === true;
+  const reactivationAmount =
+    Number(currentUser?.customReactivationAmount) > 0
+      ? Number(currentUser.customReactivationAmount)
+      : 599;
+
+  const canPayBasicUpgrade = isLoggedIn && isDbBasic && !isSheetsBasic;
+  const canPayReactivation = isLoggedIn && needsReactivation && !isSheetsBasic;
+  const canPay = canPayBasicUpgrade || canPayReactivation;
+  const alreadyActivePro =
+    isLoggedIn && !isDbBasic && !isSheetsBasic && !needsReactivation;
+
+  const handleReactivatePayment = async () => {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+    const token = localStorage.getItem('authToken');
+
+    if (!token || !razorpayKey) {
+      throw new Error('Please log in again to continue payment.');
+    }
+
+    const scriptLoaded = await loadRazorpayScript();
+    if (!scriptLoaded) {
+      throw new Error('Failed to load payment gateway. Please refresh and try again.');
+    }
+
+    const orderResponse = await fetch(`${backendUrl}/pro-payments/reactivate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hotel_id: currentUser?.hotel_id,
+        email: currentUser?.email,
+        name: currentUser?.name || currentUser?.adminName,
+        phone: currentUser?.phone,
+      }),
+    });
+
+    const orderData = await orderResponse.json().catch(() => ({}));
+    if (!orderResponse.ok || !orderData.success) {
+      throw new Error(orderData.message || 'Failed to create reactivation order');
+    }
+
+    await new Promise((r) => setTimeout(r, 400));
+
+    return new Promise<void>((resolve, reject) => {
+      const options = {
+        key: razorpayKey,
+        amount: orderData.data.amount,
+        currency: orderData.data.currency || 'INR',
+        name: 'Hotel Management System',
+        description: `PRO Plan Reactivation (₹${reactivationAmount} / 1 month)`,
+        order_id: orderData.data.id,
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const verifyResponse = await fetch(
+              `${backendUrl}/pro-payments/verify-reactivation`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  hotel_id: currentUser?.hotel_id,
+                }),
+              }
+            );
+            const verifyData = await verifyResponse.json();
+            if (!verifyResponse.ok || !verifyData.success) {
+              throw new Error(verifyData.message || 'Payment verification failed');
+            }
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        },
+        prefill: {
+          name: currentUser?.name || currentUser?.adminName || '',
+          email: currentUser?.email || '',
+          contact: currentUser?.phone || '',
+        },
+        notes: {
+          type: 'reactivation',
+          hotel_id: String(currentUser?.hotel_id || ''),
+          hotel_name: currentUser?.hotelName || '',
+        },
+        theme: { color: '#2563eb' },
+        modal: {
+          ondismiss: () => reject(new Error('Payment cancelled')),
+          confirm_close: true,
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', (resp: { error?: { description?: string } }) => {
+        reject(new Error(resp?.error?.description || 'Payment failed'));
+      });
+      rzp.open();
+    });
+  };
 
   const handlePay = async () => {
-    if (!canUpgrade) {
+    if (!isLoggedIn) {
       navigate('/login');
+      return;
+    }
+    if (!canPay) {
       return;
     }
 
     setIsPaying(true);
     try {
+      if (canPayReactivation) {
+        await handleReactivatePayment();
+        toast({
+          title: 'Payment successful',
+          description: 'Your PRO plan has been reactivated. Please log in again.',
+        });
+        setTimeout(() => {
+          clearNotificationsOnLogout();
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('currentUser');
+          navigate('/login');
+        }, 1500);
+        return;
+      }
+
       await startProUpgradeCheckout(billingPeriod, {
         hotel_id: currentUser?.hotel_id,
         hotelName: currentUser?.hotelName,
@@ -62,7 +192,7 @@ const UpgradeFlow = () => {
       setPaymentDone(true);
       toast({
         title: 'Payment successful',
-        description: `Pro plan active (${PRO_UPGRADE_PRICES[billingPeriod].label}). Enjoy full access!`,
+        description: `Pro plan active (${PRO_UPGRADE_PRICES.monthly.label}). Enjoy full access!`,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Payment could not be completed';
@@ -78,6 +208,10 @@ const UpgradeFlow = () => {
     }
   };
 
+  const payAmount = canPayReactivation
+    ? reactivationAmount
+    : PRO_UPGRADE_PRICES.monthly.amountRupees;
+
   if (paymentDone) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -90,7 +224,11 @@ const UpgradeFlow = () => {
           <CardContent>
             <Button
               className="w-full"
-              onClick={() => navigate(getPostLoginPath({ ...currentUser, plan: 'pro', hotelPlan: 'pro' }))}
+              onClick={() =>
+                navigate(
+                  getPostLoginPath({ ...currentUser, plan: 'pro', hotelPlan: 'pro' })
+                )
+              }
             >
               Go to dashboard
             </Button>
@@ -117,9 +255,13 @@ const UpgradeFlow = () => {
           <div className="mx-auto w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-center">
             <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Upgrade to Pro</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+            {needsReactivation ? 'Reactivate Pro' : 'Upgrade to Pro'}
+          </h1>
           <p className="text-muted-foreground text-sm md:text-base">
-            Pay securely with Razorpay — stay logged in, no re-registration.
+            {needsReactivation
+              ? 'Your trial or subscription has ended. Pay ₹599 / month to continue using Pro.'
+              : 'Pay securely with Razorpay — stay logged in, no re-registration.'}
           </p>
           {currentUser?.hotelName && (
             <p className="text-sm font-medium text-primary">{currentUser.hotelName}</p>
@@ -143,46 +285,35 @@ const UpgradeFlow = () => {
           </Card>
         )}
 
-        {isLoggedIn && !isDbBasic && !isSheetsBasic && (
+        {alreadyActivePro && (
           <Card className="border-green-200 bg-green-50">
             <CardContent className="pt-6 text-sm text-green-900">
-              You already have Pro access. Use the dashboard to manage your subscription.
+              You already have active Pro access. Use the dashboard to manage your subscription.
             </CardContent>
           </Card>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {(['monthly', 'yearly'] as const).map((period) => {
-            const p = PRO_UPGRADE_PRICES[period];
-            const selected = billingPeriod === period;
-            return (
-              <button
-                key={period}
-                type="button"
-                onClick={() => setBillingPeriod(period)}
-                className={`text-left rounded-xl border-2 p-5 transition-all ${
-                  selected
-                    ? 'border-primary bg-primary/5 shadow-md'
-                    : 'border-border bg-white hover:border-primary/40'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-semibold text-lg capitalize">
-                    {period === 'monthly' ? 'Monthly' : 'Yearly'}
-                  </span>
-                  {period === 'yearly' && (
-                    <span className="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                      Best value
-                    </span>
-                  )}
-                </div>
-                <p className="text-2xl font-bold text-primary">
-                  ₹{p.amountRupees.toLocaleString('en-IN')}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">per {p.label}</p>
-              </button>
-            );
-          })}
+        {needsReactivation && (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6 text-sm text-red-900">
+              Trial / subscription expired — status suspended. Pay below to reactivate for 1 month.
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="max-w-md mx-auto">
+          <div className="text-left rounded-xl border-2 border-primary bg-primary/5 shadow-md p-5">
+            <div className="flex justify-between items-start mb-2">
+              <span className="font-semibold text-lg">Monthly</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                Excluding taxes
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-primary">
+              ₹{payAmount.toLocaleString('en-IN')}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">per 1 month</p>
+          </div>
         </div>
 
         <Card>
@@ -213,7 +344,7 @@ const UpgradeFlow = () => {
 
         <Button
           className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700"
-          disabled={!canUpgrade || isPaying}
+          disabled={!canPay || isPaying}
           onClick={handlePay}
         >
           {isPaying ? (
@@ -224,8 +355,9 @@ const UpgradeFlow = () => {
           ) : (
             <>
               <CreditCard className="mr-2 h-5 w-5" />
-              Pay ₹{PRO_UPGRADE_PRICES[billingPeriod].amountRupees.toLocaleString('en-IN')} —{' '}
-              {billingPeriod === 'monthly' ? '1 month' : '1 year'}
+              {needsReactivation
+                ? `Pay ₹${payAmount.toLocaleString('en-IN')} to Reactivate`
+                : `Pay ₹${payAmount.toLocaleString('en-IN')} — 1 month`}
             </>
           )}
         </Button>

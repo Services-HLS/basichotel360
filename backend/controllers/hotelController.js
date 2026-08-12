@@ -206,7 +206,7 @@ const hotelController = {
       }
 
       const dbPlan = 'base';
-      const autoEmail = `${cleanUsername.replace(/\s+/g, '').toLowerCase()}@hotel.com`;
+      const autoEmail = `${cleanUsername.replace(/\s+/g, '').toLowerCase()}@gmail.com`;
 
       const hotelId = await Hotel.create({
         name: hotelName,

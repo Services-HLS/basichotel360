@@ -2093,7 +2093,7 @@
 // // //     }
 
 // // //     // Auto-generate missing fields for backend
-// // //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// // //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 // // //     const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 // // //     const autoAdminName = formData.adminName || formData.username;
 
@@ -2153,7 +2153,7 @@
 // // //       return;
 // // //     }
 
-// // //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// // //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 
 // // //     setIsVerifyingPhoneOTP(true);
 // // //     try {
@@ -2240,7 +2240,7 @@
 // // //     try {
 // // //       const cleanPhone = formData.phone.replace(/\D/g, '');
 // // //       // Auto-generate missing fields
-// // //       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// // //       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 // // //       const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 // // //       const autoAdminName = formData.adminName || formData.username;
 // // //       const autoAddress = formData.address || 'Address not provided';
@@ -3579,7 +3579,7 @@
 // //       return;
 // //     }
 
-// //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 // //     const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 // //     const autoAdminName = formData.adminName || formData.username;
 // //     const cleanPhone = formData.phone ? formData.phone.replace(/\D/g, '') : null;
@@ -3636,7 +3636,7 @@
 // //       return;
 // //     }
 
-// //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// //     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 
 // //     setIsVerifyingPhoneOTP(true);
 // //     try {
@@ -3722,7 +3722,7 @@
 
 // //     try {
 // //       const cleanPhone = formData.phone.replace(/\D/g, '');
-// //       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+// //       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 // //       const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 // //       const autoAdminName = formData.adminName || formData.username;
 // //       const autoAddress = formData.address || 'Address not provided';
@@ -5384,7 +5384,7 @@
 //       return;
 //     }
 
-//     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+//     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 //     const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 //     const autoAdminName = formData.adminName || formData.username;
 //     const cleanPhone = formData.phone ? formData.phone.replace(/\D/g, '') : null;
@@ -5441,7 +5441,7 @@
 //       return;
 //     }
 
-//     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+//     const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 
 //     setIsVerifyingPhoneOTP(true);
 //     try {
@@ -5536,7 +5536,7 @@
 
 //     try {
 //       const cleanPhone = formData.phone.replace(/\D/g, '');
-//       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+//       const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 //       const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
 //       const autoAdminName = formData.adminName || formData.username;
 //       const autoAddress = formData.address || 'Address not provided';
@@ -7404,7 +7404,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       return;
     }
 
-    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
     const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
     const autoAdminName = formData.adminName || formData.username;
     const cleanPhone = formData.phone ? formData.phone.replace(/\D/g, '') : null;
@@ -7461,7 +7461,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
       return;
     }
 
-    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+    const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
 
     setIsVerifyingPhoneOTP(true);
     try {
@@ -7702,7 +7702,7 @@ const RegisterModal = ({ open, onClose, onTryDemo, initialView = "form", basicOn
 
     try {
       const cleanPhone = formData.phone.replace(/\D/g, '');
-      const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@hotel.com`;
+      const autoEmail = formData.email || `${formData.username.replace(/\s+/g, '')}@gmail.com`;
       const autoHotelName = formData.hotelName || `${formData.username} Hotel`;
       const autoAdminName = formData.adminName || formData.username;
       const autoAddress = formData.address || 'Address not provided';
